@@ -1,0 +1,186 @@
+import { createBrowserRouter, Navigate } from "react-router";
+import { LoginScreen } from "./screens/shared/LoginScreen";
+import { AuthLayout } from "./layouts/AuthLayout";
+import { NotFoundScreen } from "./screens/shared/NotFoundScreen";
+import { UnauthorizedScreen } from "./screens/shared/UnauthorizedScreen";
+import { ProfileSettings } from "./screens/shared/ProfileSettings";
+import { NotificationCenter } from "./screens/shared/NotificationCenter";
+
+// Super Admin screens
+import { SuperAdminDashboard } from "./screens/super-admin/SuperAdminDashboard";
+import { UserManagement } from "./screens/super-admin/UserManagement";
+import { AuditLog } from "./screens/super-admin/AuditLog";
+import { AcademicYearManagement } from "./screens/super-admin/AcademicYearManagement";
+
+// Dean screens
+import { DeanDashboard } from "./screens/dean/DeanDashboard";
+import { PLevelManagement } from "./screens/dean/PLevelManagement";
+import { ClassManagement } from "./screens/dean/ClassManagement";
+import { ExcelImport } from "./screens/dean/ExcelImport";
+import { AlgorithmSelection } from "./screens/dean/AlgorithmSelection";
+import { PreviewTable } from "./screens/dean/PreviewTable";
+import { DistributionScreen } from "./screens/dean/DistributionScreen";
+import { MidTermAdjustment } from "./screens/dean/MidTermAdjustment";
+
+// Principal screens
+import { PrincipalDashboard } from "./screens/principal/PrincipalDashboard";
+import { PendingApprovals } from "./screens/principal/PendingApprovals";
+import { ShuffleReview } from "./screens/principal/ShuffleReview";
+
+// Teacher screens
+import { TeacherDashboard } from "./screens/teacher/TeacherDashboard";
+import { MyClassStudentList } from "./screens/teacher/MyClassStudentList";
+
+// Accountant screens
+import { AccountantDashboard } from "./screens/accountant/AccountantDashboard";
+import { ClassListsSelector } from "./screens/accountant/ClassListsSelector";
+import { StudentListPerClass } from "./screens/accountant/StudentListPerClass";
+import { EnrollmentServiceSelector } from "./screens/accountant/EnrollmentServiceSelector";
+import { FeedingEnrollment } from "./screens/accountant/FeedingEnrollment";
+import { TransportEnrollment } from "./screens/accountant/TransportEnrollment";
+import { ZoneManagement } from "./screens/accountant/ZoneManagement";
+import { CommuniqueGenerator } from "./screens/accountant/CommuniqueGenerator";
+
+export const router = createBrowserRouter([
+  {
+    path: "/login",
+    Component: LoginScreen,
+  },
+  {
+    path: "/",
+    Component: AuthLayout,
+    children: [
+      {
+        index: true,
+        element: <Navigate to="/login" replace />,
+      },
+      // Super Admin routes
+      {
+        path: "admin/dashboard",
+        Component: SuperAdminDashboard,
+      },
+      {
+        path: "admin/users",
+        Component: UserManagement,
+      },
+      {
+        path: "admin/audit-log",
+        Component: AuditLog,
+      },
+      {
+        path: "admin/academic-year",
+        Component: AcademicYearManagement,
+      },
+
+      // Dean routes
+      {
+        path: "dean/dashboard",
+        Component: DeanDashboard,
+      },
+      {
+        path: "dean/p-levels",
+        Component: PLevelManagement,
+      },
+      {
+        path: "dean/p-levels/:pLevel/classes",
+        Component: ClassManagement,
+      },
+      {
+        path: "dean/import",
+        Component: ExcelImport,
+      },
+      {
+        path: "dean/algorithm/:pLevel",
+        Component: AlgorithmSelection,
+      },
+      {
+        path: "dean/preview/:pLevel",
+        Component: PreviewTable,
+      },
+      {
+        path: "dean/distribute/:pLevel",
+        Component: DistributionScreen,
+      },
+      {
+        path: "dean/mid-term-adjustment",
+        Component: MidTermAdjustment,
+      },
+
+      // Principal routes
+      {
+        path: "principal/dashboard",
+        Component: PrincipalDashboard,
+      },
+      {
+        path: "principal/approvals",
+        Component: PendingApprovals,
+      },
+      {
+        path: "principal/review/:pLevel",
+        Component: ShuffleReview,
+      },
+
+      // Teacher routes
+      {
+        path: "teacher/dashboard",
+        Component: TeacherDashboard,
+      },
+      {
+        path: "teacher/class/:classId",
+        Component: MyClassStudentList,
+      },
+
+      // Accountant routes
+      {
+        path: "accountant/dashboard",
+        Component: AccountantDashboard,
+      },
+      {
+        path: "accountant/class-lists",
+        Component: ClassListsSelector,
+      },
+      {
+        path: "accountant/class-lists/:pLevel",
+        Component: StudentListPerClass,
+      },
+      {
+        path: "accountant/enrollment",
+        Component: EnrollmentServiceSelector,
+      },
+      {
+        path: "accountant/enrollment/feeding",
+        Component: FeedingEnrollment,
+      },
+      {
+        path: "accountant/enrollment/transport",
+        Component: TransportEnrollment,
+      },
+      {
+        path: "accountant/zones",
+        Component: ZoneManagement,
+      },
+      {
+        path: "accountant/communique",
+        Component: CommuniqueGenerator,
+      },
+
+      // Shared routes
+      {
+        path: "profile",
+        Component: ProfileSettings,
+      },
+      {
+        path: "notifications",
+        Component: NotificationCenter,
+      },
+      {
+        path: "403",
+        Component: UnauthorizedScreen,
+      },
+      {
+        path: "*",
+        Component: NotFoundScreen,
+      },
+    ],
+  },
+]);
