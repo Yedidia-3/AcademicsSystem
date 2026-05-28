@@ -13,6 +13,9 @@ export class Notification {
   @Column({ type: 'text' })
   message: string;
 
+  @Column({ type: 'enum', enum: ['info', 'success', 'warning', 'error'], default: 'info' })
+  type: 'info' | 'success' | 'warning' | 'error';
+
   @Column({ default: false })
   is_read: boolean;
 

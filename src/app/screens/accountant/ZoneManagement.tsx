@@ -1,50 +1,26 @@
-import { useState } from "react";
-import { Plus, MoreVertical } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Plus, MoreVertical, Loader2 } from "lucide-react";
 import { Card, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../../components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../../components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "../../components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../../components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { toast } from "sonner";
+import { api } from "../../../lib/api";
 
 interface Zone {
-  id: string;
+  id: number;
   name: string;
   price: number;
-  studentsAssigned: number;
   status: string;
-  statusColor: string;
 }
 
-const mockZones: Zone[] = [
-  { id: "1", name: "Zone 1", price: 15000, studentsAssigned: 45, status: "Active", statusColor: "#1A7F4B" },
-  { id: "2", name: "Zone 2", price: 20000, studentsAssigned: 38, status: "Active", statusColor: "#1A7F4B" },
-  { id: "3", name: "Zone 3", price: 25000, studentsAssigned: 0, status: "Active", statusColor: "#1A7F4B" },
-];
-
 export function ZoneManagement() {
-  const [zones, setZones] = useState<Zone[]>(mockZones);
+  const [zones, setZones] = useState<Zone[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -52,45 +28,68 @@ export function ZoneManagement() {
   const [zoneName, setZoneName] = useState("");
   const [zonePrice, setZonePrice] = useState("");
 
-  const handleAddZone = () => {
-    if (zoneName && zonePrice) {
-      toast.success(`Zone ${zoneName} created successfully`);
+  const load = useCallback(async () => {
+    try {
+      const res = await api.get<any>('/api/v1/accountant/zones');
+      setZones(Array.isArray(res) ? res : res.data ?? []);
+    } catch {
+      toast.error('Failed to load zones');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleAdd = async () => {
+    if (!zoneName.trim() || !zonePrice) { toast.error("Please fill all fields"); return; }
+    setSaving(true);
+    try {
+      await api.post('/api/v1/accountant/zones', { name: zoneName.trim(), price: +zonePrice });
+      toast.success(`Zone ${zoneName} created`);
       setShowAddDialog(false);
-      setZoneName("");
-      setZonePrice("");
-    } else {
-      toast.error("Please fill all fields");
+      setZoneName(""); setZonePrice("");
+      await load();
+    } catch (err: any) {
+      toast.error(err.message ?? 'Failed to create zone');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleEditZone = () => {
-    if (zoneName && zonePrice) {
-      toast.success(`Zone ${selectedZone?.name} updated successfully`);
+  const handleEdit = async () => {
+    if (!selectedZone || !zoneName.trim() || !zonePrice) return;
+    setSaving(true);
+    try {
+      await api.put(`/api/v1/accountant/zones/${selectedZone.id}`, { name: zoneName.trim(), price: +zonePrice });
+      toast.success(`Zone ${zoneName} updated`);
       setShowEditDialog(false);
-      setZoneName("");
-      setZonePrice("");
-      setSelectedZone(null);
+      setZoneName(""); setZonePrice(""); setSelectedZone(null);
+      await load();
+    } catch (err: any) {
+      toast.error(err.message ?? 'Failed to update zone');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleDeleteClick = (zone: Zone) => {
-    setSelectedZone(zone);
-    if (zone.studentsAssigned > 0) {
-      toast.error(`Zone ${zone.name} has ${zone.studentsAssigned} students assigned. Reassign them before deleting.`);
-    } else {
-      setShowDeleteDialog(true);
-    }
-  };
-
-  const handleDeleteZone = () => {
-    if (selectedZone) {
-      toast.success(`Zone ${selectedZone.name} deleted successfully`);
+  const handleDelete = async () => {
+    if (!selectedZone) return;
+    setSaving(true);
+    try {
+      await api.delete(`/api/v1/accountant/zones/${selectedZone.id}`);
+      toast.success(`Zone ${selectedZone.name} removed`);
       setShowDeleteDialog(false);
       setSelectedZone(null);
+      await load();
+    } catch (err: any) {
+      toast.error(err.message ?? 'Failed to delete zone');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleEditClick = (zone: Zone) => {
+  const openEdit = (zone: Zone) => {
     setSelectedZone(zone);
     setZoneName(zone.name);
     setZonePrice(zone.price.toString());
@@ -101,91 +100,75 @@ export function ZoneManagement() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold" style={{ color: "#2C2C2C" }}>
-            Transport Zones
-          </h1>
-          <p className="text-sm mt-1" style={{ color: "#9A9A9A" }}>
-            Manage transport zones and pricing
-          </p>
+          <h1 className="text-2xl font-semibold" style={{ color: "#2C2C2C" }}>Transport Zones</h1>
+          <p className="text-sm mt-1" style={{ color: "#9A9A9A" }}>Manage transport zones and pricing</p>
         </div>
-        <Button
-          onClick={() => setShowAddDialog(true)}
-          className="h-11"
-          style={{ backgroundColor: "#800020", color: "#FFFFFF" }}
-        >
-          <Plus size={18} className="mr-2" />
-          Add Zone
+        <Button onClick={() => setShowAddDialog(true)} className="h-11"
+          style={{ backgroundColor: "#800020", color: "#FFFFFF" }}>
+          <Plus size={18} className="mr-2" /> Add Zone
         </Button>
       </div>
 
       <Card style={{ borderColor: "#E5E5E7" }}>
         <CardContent className="p-6">
-          <div className="border rounded-lg overflow-hidden" style={{ borderColor: "#E5E5E7" }}>
-            <Table>
-              <TableHeader style={{ backgroundColor: "#001F5B" }}>
-                <TableRow>
-                  <TableHead className="text-white">Zone Name</TableHead>
-                  <TableHead className="text-white">Price (RWF)</TableHead>
-                  <TableHead className="text-white">Students Assigned</TableHead>
-                  <TableHead className="text-white">Status</TableHead>
-                  <TableHead className="text-white text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {zones.map((zone, index) => (
-                  <TableRow
-                    key={zone.id}
-                    style={{
-                      backgroundColor: index % 2 === 0 ? "#FFFFFF" : "#F4F4F6",
-                    }}
-                  >
-                    <TableCell style={{ color: "#2C2C2C" }} className="font-semibold">
-                      {zone.name}
-                    </TableCell>
-                    <TableCell style={{ color: "#2C2C2C" }}>
-                      {zone.price.toLocaleString()} RWF
-                    </TableCell>
-                    <TableCell style={{ color: "#2C2C2C" }}>
-                      {zone.studentsAssigned} students
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className="px-3 py-1 rounded-full text-xs font-semibold text-white"
-                        style={{ backgroundColor: zone.statusColor }}
-                      >
-                        {zone.status}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <MoreVertical size={16} />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleEditClick(zone)}>
-                            Edit Zone
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>Deactivate Zone</DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleDeleteClick(zone)}
-                            className="text-red-600"
-                          >
-                            Delete Zone
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="animate-spin" size={28} style={{ color: "#001F5B" }} />
+            </div>
+          ) : zones.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-lg font-semibold" style={{ color: "#2C2C2C" }}>No zones yet</p>
+              <p className="text-sm mt-2 mb-4" style={{ color: "#9A9A9A" }}>Create the first transport zone.</p>
+              <Button onClick={() => setShowAddDialog(true)} style={{ backgroundColor: "#800020", color: "#fff" }}>
+                <Plus size={18} className="mr-2" /> Add Zone
+              </Button>
+            </div>
+          ) : (
+            <div className="border rounded-lg overflow-hidden" style={{ borderColor: "#E5E5E7" }}>
+              <Table>
+                <TableHeader style={{ backgroundColor: "#001F5B" }}>
+                  <TableRow>
+                    <TableHead className="text-white">Zone Name</TableHead>
+                    <TableHead className="text-white">Price (RWF)</TableHead>
+                    <TableHead className="text-white">Status</TableHead>
+                    <TableHead className="text-white text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {zones.map((zone, index) => (
+                    <TableRow key={zone.id} style={{ backgroundColor: index % 2 === 0 ? "#FFFFFF" : "#F4F4F6" }}>
+                      <TableCell className="font-semibold" style={{ color: "#2C2C2C" }}>{zone.name}</TableCell>
+                      <TableCell style={{ color: "#2C2C2C" }}>{zone.price.toLocaleString()} RWF</TableCell>
+                      <TableCell>
+                        <span className="px-3 py-1 rounded-full text-xs font-semibold text-white"
+                          style={{ backgroundColor: zone.status === 'active' ? "#1A7F4B" : "#9A9A9A" }}>
+                          {zone.status === 'active' ? 'Active' : 'Inactive'}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm"><MoreVertical size={16} /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openEdit(zone)}>Edit Zone</DropdownMenuItem>
+                            <DropdownMenuItem className="text-red-600"
+                              onClick={() => { setSelectedZone(zone); setShowDeleteDialog(true); }}>
+                              Delete Zone
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Add Zone Dialog */}
+      {/* Add Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -194,42 +177,26 @@ export function ZoneManagement() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
-              <Label htmlFor="zone-name">Zone Name</Label>
-              <Input
-                id="zone-name"
-                value={zoneName}
-                onChange={(e) => setZoneName(e.target.value)}
-                placeholder="e.g., Zone 4"
-                className="mt-2 h-11"
-              />
+              <Label>Zone Name</Label>
+              <Input value={zoneName} onChange={e => setZoneName(e.target.value)}
+                placeholder="e.g., Zone 4" className="mt-2 h-11" />
             </div>
             <div>
-              <Label htmlFor="zone-price">Price (RWF)</Label>
-              <Input
-                id="zone-price"
-                type="number"
-                value={zonePrice}
-                onChange={(e) => setZonePrice(e.target.value)}
-                placeholder="e.g., 15000"
-                className="mt-2 h-11"
-              />
+              <Label>Price (RWF)</Label>
+              <Input type="number" value={zonePrice} onChange={e => setZonePrice(e.target.value)}
+                placeholder="e.g., 15000" className="mt-2 h-11" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowAddDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleAddZone}
-              style={{ backgroundColor: "#800020", color: "#FFFFFF" }}
-            >
-              Add Zone
+            <Button variant="ghost" onClick={() => { setShowAddDialog(false); setZoneName(""); setZonePrice(""); }}>Cancel</Button>
+            <Button onClick={handleAdd} disabled={saving} style={{ backgroundColor: "#800020", color: "#FFFFFF" }}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Add Zone
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Edit Zone Dialog */}
+      {/* Edit Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -238,57 +205,34 @@ export function ZoneManagement() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
-              <Label htmlFor="edit-zone-name">Zone Name</Label>
-              <Input
-                id="edit-zone-name"
-                value={zoneName}
-                onChange={(e) => setZoneName(e.target.value)}
-                className="mt-2 h-11"
-              />
+              <Label>Zone Name</Label>
+              <Input value={zoneName} onChange={e => setZoneName(e.target.value)} className="mt-2 h-11" />
             </div>
             <div>
-              <Label htmlFor="edit-zone-price">Price (RWF)</Label>
-              <Input
-                id="edit-zone-price"
-                type="number"
-                value={zonePrice}
-                onChange={(e) => setZonePrice(e.target.value)}
-                className="mt-2 h-11"
-              />
+              <Label>Price (RWF)</Label>
+              <Input type="number" value={zonePrice} onChange={e => setZonePrice(e.target.value)} className="mt-2 h-11" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowEditDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleEditZone}
-              style={{ backgroundColor: "#800020", color: "#FFFFFF" }}
-            >
-              Save Changes
+            <Button variant="ghost" onClick={() => setShowEditDialog(false)}>Cancel</Button>
+            <Button onClick={handleEdit} disabled={saving} style={{ backgroundColor: "#800020", color: "#FFFFFF" }}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
+      {/* Delete Dialog */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Delete {selectedZone?.name}?</DialogTitle>
-            <DialogDescription>
-              This action cannot be undone. This will permanently delete the zone.
-            </DialogDescription>
+            <DialogDescription>Zones with active enrollments cannot be deleted.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowDeleteDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleDeleteZone}
-              style={{ backgroundColor: "#C0392B", color: "#FFFFFF" }}
-            >
-              Delete
+            <Button variant="ghost" onClick={() => setShowDeleteDialog(false)}>Cancel</Button>
+            <Button onClick={handleDelete} disabled={saving} style={{ backgroundColor: "#C0392B", color: "#FFFFFF" }}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Delete
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -16,11 +16,24 @@ import { AcademicsService } from './academics.service';
 export class AcademicsController {
   constructor(private academicsService: AcademicsService) {}
 
+  // Academic Years (shared — accessible to all roles)
+  @Get('academic-years')
+  @Roles('dean', 'principal', 'teacher', 'accountant', 'super_admin')
+  listAcademicYears() {
+    return this.academicsService.listAcademicYears();
+  }
+
   // P-Levels
   @Get('p-levels')
   @Roles('dean', 'principal', 'teacher', 'accountant')
   listPLevels(@Query('academic_year_id') yearId: string) {
     return this.academicsService.listPLevels(+yearId);
+  }
+
+  @Get('p-levels/:id')
+  @Roles('dean', 'principal', 'teacher', 'accountant')
+  getPLevel(@Param('id') id: string) {
+    return this.academicsService.getPLevel(+id);
   }
 
   @Post('p-levels')

@@ -185,6 +185,7 @@ export class ShuffleService {
     await this.notificationsService.notify(
       principalId,
       `Dean has submitted a class list for P-level approval (Session #${sessionId}).`,
+      'info',
     );
 
     return { message: 'Submitted for Principal approval' };
@@ -203,6 +204,7 @@ export class ShuffleService {
     await this.notificationsService.notify(
       deanId,
       `Class list for Session #${sessionId} has been approved. Ready for distribution.`,
+      'success',
     );
 
     return { message: 'Approved successfully' };
@@ -222,6 +224,7 @@ export class ShuffleService {
     await this.notificationsService.notify(
       deanId,
       `Class list for Session #${sessionId} was rejected. Note: ${note}. Please review and resubmit.`,
+      'error',
     );
 
     return { message: 'Rejected and Dean notified' };

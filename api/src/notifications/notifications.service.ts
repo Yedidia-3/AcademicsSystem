@@ -15,8 +15,8 @@ export class NotificationsService {
     this.gateway = gateway;
   }
 
-  async notify(userId: number, message: string) {
-    const notification = this.notificationRepo.create({ user_id: userId, message });
+  async notify(userId: number, message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') {
+    const notification = this.notificationRepo.create({ user_id: userId, message, type });
     const saved = await this.notificationRepo.save(notification);
 
     // Push real-time via WebSocket if gateway is available

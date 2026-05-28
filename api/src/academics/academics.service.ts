@@ -18,6 +18,16 @@ export class AcademicsService {
 
   // ─── P-Levels ────────────────────────────────────────────────────────────────
 
+  async listAcademicYears() {
+    return this.yearRepo.find({ order: { created_at: 'DESC' } });
+  }
+
+  async getPLevel(id: number) {
+    const pl = await this.pLevelRepo.findOne({ where: { id } });
+    if (!pl) throw new NotFoundException('P-Level not found');
+    return pl;
+  }
+
   async listPLevels(academicYearId: number) {
     return this.pLevelRepo.find({
       where: { academic_year_id: academicYearId, status: 'active' },

@@ -87,7 +87,7 @@ export const router = createBrowserRouter([
         Component: PLevelManagement,
       },
       {
-        path: "dean/p-levels/:pLevel/classes",
+        path: "dean/p-levels/:pLevelId/classes",
         Component: ClassManagement,
       },
       {
@@ -95,15 +95,15 @@ export const router = createBrowserRouter([
         Component: ExcelImport,
       },
       {
-        path: "dean/algorithm/:pLevel",
+        path: "dean/algorithm/:pLevelId",
         Component: AlgorithmSelection,
       },
       {
-        path: "dean/preview/:pLevel",
+        path: "dean/preview/:sessionId",
         Component: PreviewTable,
       },
       {
-        path: "dean/distribute/:pLevel",
+        path: "dean/distribute/:sessionId",
         Component: DistributionScreen,
       },
       {
@@ -121,7 +121,7 @@ export const router = createBrowserRouter([
         Component: PendingApprovals,
       },
       {
-        path: "principal/review/:pLevel",
+        path: "principal/review/:sessionId",
         Component: ShuffleReview,
       },
 
@@ -145,7 +145,7 @@ export const router = createBrowserRouter([
         Component: ClassListsSelector,
       },
       {
-        path: "accountant/class-lists/:pLevel",
+        path: "accountant/class-lists/:pLevelId",
         Component: StudentListPerClass,
       },
       {
