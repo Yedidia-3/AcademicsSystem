@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, UseGuards, BadRequestException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { CurrentUser } from './current-user.decorator';
 import { LoginDto } from './dto/login.dto';
@@ -24,5 +24,17 @@ export class AuthController {
   @Get('me')
   me(@CurrentUser() user: User) {
     return this.authService.me(user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('change-password')
+  changePassword(
+    @CurrentUser() user: User,
+    @Body('current_password') currentPassword: string,
+    @Body('new_password') newPassword: string,
+  ) {
+    if (!currentPassword || !newPassword) throw new BadRequestException('current_password and new_password are required');
+    if (newPassword.length < 8) throw new BadRequestException('New password must be at least 8 characters');
+    return this.authService.changePassword(user.id, currentPassword, newPassword);
   }
 }

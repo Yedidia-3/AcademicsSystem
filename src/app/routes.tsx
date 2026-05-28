@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate } from "react-router";
 import { LoginScreen } from "./screens/shared/LoginScreen";
+import { ChangePasswordScreen } from "./screens/shared/ChangePasswordScreen";
 import { AuthLayout } from "./layouts/AuthLayout";
 import { NotFoundScreen } from "./screens/shared/NotFoundScreen";
 import { UnauthorizedScreen } from "./screens/shared/UnauthorizedScreen";
@@ -45,6 +46,10 @@ export const router = createBrowserRouter([
   {
     path: "/login",
     Component: LoginScreen,
+  },
+  {
+    path: "/change-password",
+    Component: ChangePasswordScreen,
   },
   {
     path: "/",

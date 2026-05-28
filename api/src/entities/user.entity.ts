@@ -27,6 +27,9 @@ export class User {
   @Column({ type: 'enum', enum: ['active', 'inactive'], default: 'active' })
   status: 'active' | 'inactive';
 
+  @Column({ default: true })
+  must_change_password: boolean;
+
   @Column({ type: 'int', default: 0 })
   failed_login_attempts: number;
 

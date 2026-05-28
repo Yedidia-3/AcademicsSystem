@@ -1,73 +1,160 @@
-import { useState } from "react";
-import { Search, Plus, MoreVertical } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
+import { useState, useEffect, useCallback } from "react";
+import { Search, Plus, MoreVertical, Copy, Check, KeyRound, UserX, Loader2 } from "lucide-react";
+import { Card, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
+import { Label } from "../../components/ui/label";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "../../components/ui/table";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "../../components/ui/dropdown-menu";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "../../components/ui/select";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "../../components/ui/dialog";
+import { api } from "../../../lib/api";
 
-const mockUsers = [
-  { id: 1, name: "John Doe", email: "john.doe@jericho.rw", role: "Dean", status: "Active", lastLogin: "2 hours ago" },
-  { id: 2, name: "Jane Smith", email: "jane.smith@jericho.rw", role: "Principal", status: "Active", lastLogin: "1 day ago" },
-  { id: 3, name: "Mike Johnson", email: "mike.j@jericho.rw", role: "Teacher", status: "Active", lastLogin: "3 hours ago" },
-  { id: 4, name: "Sarah Williams", email: "sarah.w@jericho.rw", role: "Accountant", status: "Active", lastLogin: "5 hours ago" },
-  { id: 5, name: "David Brown", email: "david.b@jericho.rw", role: "Teacher", status: "Inactive", lastLogin: "1 week ago" },
-];
+interface User {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+  last_login: string | null;
+  must_change_password: boolean;
+}
+
+const roleLabels: Record<string, string> = {
+  super_admin: "Super Admin",
+  dean: "Dean",
+  principal: "Principal",
+  teacher: "Teacher",
+  accountant: "Accountant",
+};
+
+const roleBadgeColor: Record<string, string> = {
+  super_admin: "#800020",
+  dean: "#001F5B",
+  principal: "#C9A84C",
+  teacher: "#1A7F4B",
+  accountant: "#2563EB",
+};
+
+function formatLastLogin(date: string | null) {
+  if (!date) return "Never";
+  const d = new Date(date);
+  const diff = Date.now() - d.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
 
 export function UserManagement() {
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [roleFilter, setRoleFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
 
-  const filteredUsers = mockUsers.filter(user => {
-    const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = roleFilter === "all" || user.role === roleFilter;
-    const matchesStatus = statusFilter === "all" || user.status === statusFilter;
+  // Add user dialog
+  const [addOpen, setAddOpen] = useState(false);
+  const [addLoading, setAddLoading] = useState(false);
+  const [addError, setAddError] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [newRole, setNewRole] = useState("dean");
+
+  // Credential reveal modal
+  const [credOpen, setCredOpen] = useState(false);
+  const [cred, setCred] = useState<{ name: string; email: string; password: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  // Reset password result
+  const [resetResult, setResetResult] = useState<{ name: string; password: string } | null>(null);
+  const [resetOpen, setResetOpen] = useState(false);
+
+  const loadUsers = useCallback(async () => {
+    try {
+      const res = await api.get<{ data: User[] }>("/api/v1/admin/users");
+      setUsers((res as any).data ?? res as any);
+    } catch {
+      // silently fail
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadUsers(); }, [loadUsers]);
+
+  const filteredUsers = users.filter((u) => {
+    const matchesSearch =
+      u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      u.email.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesRole = roleFilter === "all" || u.role === roleFilter;
+    const matchesStatus = statusFilter === "all" || u.status === statusFilter;
     return matchesSearch && matchesRole && matchesStatus;
   });
 
-  const getRoleBadgeColor = (role: string) => {
-    const colors: Record<string, string> = {
-      "Super Admin": "#800020",
-      "Dean": "#001F5B",
-      "Principal": "#C9A84C",
-      "Teacher": "#1A7F4B",
-      "Accountant": "#2563EB",
-    };
-    return colors[role] || "#9A9A9A";
+  const handleAddUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddError("");
+    setAddLoading(true);
+    try {
+      const res = await api.post<User & { temp_password: string }>("/api/v1/admin/users", {
+        name: newName,
+        email: newEmail,
+        role: newRole,
+      });
+      await loadUsers();
+      setAddOpen(false);
+      setNewName(""); setNewEmail(""); setNewRole("dean");
+      setCred({ name: (res as any).name, email: (res as any).email, password: (res as any).temp_password });
+      setCredOpen(true);
+    } catch (err: any) {
+      setAddError(err.message ?? "Failed to create user");
+    } finally {
+      setAddLoading(false);
+    }
   };
 
-  const getStatusBadgeColor = (status: string) => {
-    return status === "Active" ? "#1A7F4B" : "#9A9A9A";
+  const handleResetPassword = async (user: User) => {
+    try {
+      const res = await api.post<{ temp_password: string }>(`/api/v1/admin/users/${user.id}/reset-password`, {});
+      setResetResult({ name: user.name, password: (res as any).temp_password });
+      setResetOpen(true);
+    } catch (err: any) {
+      alert(err.message ?? "Reset failed");
+    }
+  };
+
+  const handleDeactivate = async (user: User) => {
+    if (!confirm(`Deactivate ${user.name}?`)) return;
+    try {
+      await api.delete(`/api/v1/admin/users/${user.id}`);
+      await loadUsers();
+    } catch (err: any) {
+      alert(err.message ?? "Failed");
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold" style={{ color: "#2C2C2C" }}>Users</h1>
-        </div>
+        <h1 className="text-2xl font-semibold" style={{ color: "#2C2C2C" }}>Users</h1>
         <Button
+          onClick={() => setAddOpen(true)}
           className="h-11"
           style={{ backgroundColor: "#800020", color: "#FFFFFF" }}
         >
@@ -81,11 +168,7 @@ export function UserManagement() {
           {/* Filters */}
           <div className="flex flex-col md:flex-row gap-4 mb-6">
             <div className="flex-1 relative">
-              <Search
-                size={18}
-                className="absolute left-3 top-1/2 -translate-y-1/2"
-                style={{ color: "#9A9A9A" }}
-              />
+              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "#9A9A9A" }} />
               <Input
                 placeholder="Search users..."
                 value={searchTerm}
@@ -94,95 +177,238 @@ export function UserManagement() {
               />
             </div>
             <Select value={roleFilter} onValueChange={setRoleFilter}>
-              <SelectTrigger className="w-full md:w-48 h-11">
-                <SelectValue placeholder="Filter by role" />
+              <SelectTrigger className="w-full md:w-44 h-11">
+                <SelectValue placeholder="All Roles" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Roles</SelectItem>
-                <SelectItem value="Dean">Dean</SelectItem>
-                <SelectItem value="Principal">Principal</SelectItem>
-                <SelectItem value="Teacher">Teacher</SelectItem>
-                <SelectItem value="Accountant">Accountant</SelectItem>
+                <SelectItem value="dean">Dean</SelectItem>
+                <SelectItem value="principal">Principal</SelectItem>
+                <SelectItem value="teacher">Teacher</SelectItem>
+                <SelectItem value="accountant">Accountant</SelectItem>
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full md:w-48 h-11">
-                <SelectValue placeholder="Filter by status" />
+              <SelectTrigger className="w-full md:w-44 h-11">
+                <SelectValue placeholder="All Statuses" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="Active">Active</SelectItem>
-                <SelectItem value="Inactive">Inactive</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           {/* Table */}
-          <div className="border rounded-lg overflow-hidden" style={{ borderColor: "#E5E5E7" }}>
-            <Table>
-              <TableHeader style={{ backgroundColor: "#001F5B" }}>
-                <TableRow>
-                  <TableHead className="text-white">Name</TableHead>
-                  <TableHead className="text-white">Email</TableHead>
-                  <TableHead className="text-white">Role</TableHead>
-                  <TableHead className="text-white">Status</TableHead>
-                  <TableHead className="text-white">Last Login</TableHead>
-                  <TableHead className="text-white text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredUsers.map((user, index) => (
-                  <TableRow
-                    key={user.id}
-                    style={{
-                      backgroundColor: index % 2 === 0 ? "#FFFFFF" : "#F4F4F6",
-                    }}
-                    className="hover:bg-[#FFF5F7]"
-                  >
-                    <TableCell style={{ color: "#2C2C2C" }} className="font-medium">
-                      {user.name}
-                    </TableCell>
-                    <TableCell style={{ color: "#2C2C2C" }}>{user.email}</TableCell>
-                    <TableCell>
-                      <span
-                        className="px-3 py-1 rounded-full text-xs font-semibold text-white"
-                        style={{ backgroundColor: getRoleBadgeColor(user.role) }}
-                      >
-                        {user.role}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className="px-3 py-1 rounded-full text-xs font-semibold text-white"
-                        style={{ backgroundColor: getStatusBadgeColor(user.status) }}
-                      >
-                        {user.status}
-                      </span>
-                    </TableCell>
-                    <TableCell style={{ color: "#9A9A9A" }}>{user.lastLogin}</TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <MoreVertical size={16} />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem>Edit user</DropdownMenuItem>
-                          <DropdownMenuItem>Reset password</DropdownMenuItem>
-                          <DropdownMenuItem>
-                            {user.status === "Active" ? "Deactivate" : "Reactivate"}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="animate-spin" size={32} style={{ color: "#001F5B" }} />
+            </div>
+          ) : (
+            <div className="border rounded-lg overflow-hidden" style={{ borderColor: "#E5E5E7" }}>
+              <Table>
+                <TableHeader style={{ backgroundColor: "#001F5B" }}>
+                  <TableRow>
+                    <TableHead className="text-white">Name</TableHead>
+                    <TableHead className="text-white">Email</TableHead>
+                    <TableHead className="text-white">Role</TableHead>
+                    <TableHead className="text-white">Status</TableHead>
+                    <TableHead className="text-white">Last Login</TableHead>
+                    <TableHead className="text-white text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {filteredUsers.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-12" style={{ color: "#9A9A9A" }}>
+                        No users found. Use "Add User" to create the first one.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredUsers.map((user, index) => (
+                      <TableRow
+                        key={user.id}
+                        style={{ backgroundColor: index % 2 === 0 ? "#FFFFFF" : "#F4F4F6" }}
+                      >
+                        <TableCell className="font-medium" style={{ color: "#2C2C2C" }}>
+                          <div className="flex items-center gap-2">
+                            {user.name}
+                            {user.must_change_password && (
+                              <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: "#FFF3E0", color: "#E65100" }}>
+                                Temp password
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell style={{ color: "#2C2C2C" }}>{user.email}</TableCell>
+                        <TableCell>
+                          <span className="px-3 py-1 rounded-full text-xs font-semibold text-white"
+                            style={{ backgroundColor: roleBadgeColor[user.role] ?? "#9A9A9A" }}>
+                            {roleLabels[user.role] ?? user.role}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <span className="px-3 py-1 rounded-full text-xs font-semibold text-white"
+                            style={{ backgroundColor: user.status === "active" ? "#1A7F4B" : "#9A9A9A" }}>
+                            {user.status === "active" ? "Active" : "Inactive"}
+                          </span>
+                        </TableCell>
+                        <TableCell style={{ color: "#9A9A9A" }}>
+                          {formatLastLogin(user.last_login)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm"><MoreVertical size={16} /></Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleResetPassword(user)}>
+                                <KeyRound size={14} className="mr-2" /> Reset password
+                              </DropdownMenuItem>
+                              {user.status === "active" && (
+                                <DropdownMenuItem
+                                  onClick={() => handleDeactivate(user)}
+                                  className="text-red-600"
+                                >
+                                  <UserX size={14} className="mr-2" /> Deactivate
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {/* ── Add User Dialog ── */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add New User</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleAddUser} className="space-y-4 py-2">
+            <div>
+              <Label>Full Name</Label>
+              <Input className="mt-2 h-11" placeholder="e.g. Jean Claude Habimana"
+                value={newName} onChange={(e) => setNewName(e.target.value)} required />
+            </div>
+            <div>
+              <Label>Email Address</Label>
+              <Input className="mt-2 h-11" type="email" placeholder="e.g. jc.habimana@jericho.rw"
+                value={newEmail} onChange={(e) => setNewEmail(e.target.value)} required />
+            </div>
+            <div>
+              <Label>Role</Label>
+              <Select value={newRole} onValueChange={setNewRole}>
+                <SelectTrigger className="mt-2 h-11">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="dean">Dean of Studies</SelectItem>
+                  <SelectItem value="principal">Principal</SelectItem>
+                  <SelectItem value="teacher">Teacher</SelectItem>
+                  <SelectItem value="accountant">Accountant</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {addError && (
+              <p className="text-sm p-3 rounded-md" style={{ backgroundColor: "#FEE", color: "#C0392B" }}>
+                {addError}
+              </p>
+            )}
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={addLoading}
+                style={{ backgroundColor: "#800020", color: "#fff" }}>
+                {addLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creating...</> : "Create User"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Credential Reveal Modal ── */}
+      <Dialog open={credOpen} onOpenChange={setCredOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>User Created — Share Credentials</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-4">
+            <p className="text-sm" style={{ color: "#9A9A9A" }}>
+              These are <strong style={{ color: "#2C2C2C" }}>{cred?.name}</strong>'s login credentials.
+              Copy and share them securely. The system will force them to change their password on first login.
+            </p>
+            <div className="rounded-lg p-4 space-y-3" style={{ backgroundColor: "#F4F4F6" }}>
+              <div>
+                <p className="text-xs font-semibold mb-1" style={{ color: "#9A9A9A" }}>EMAIL</p>
+                <p className="font-mono text-sm" style={{ color: "#2C2C2C" }}>{cred?.email}</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold mb-1" style={{ color: "#9A9A9A" }}>TEMPORARY PASSWORD</p>
+                <div className="flex items-center justify-between">
+                  <p className="font-mono text-lg font-bold tracking-widest" style={{ color: "#001F5B" }}>
+                    {cred?.password}
+                  </p>
+                  <button
+                    onClick={() => copyToClipboard(`Email: ${cred?.email}\nPassword: ${cred?.password}`)}
+                    className="p-2 rounded-md hover:bg-gray-200 transition-colors"
+                  >
+                    {copied ? <Check size={18} style={{ color: "#1A7F4B" }} /> : <Copy size={18} style={{ color: "#9A9A9A" }} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <p className="text-xs" style={{ color: "#E65100" }}>
+              ⚠ This password won't be shown again. Make sure to copy it now.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setCredOpen(false)} style={{ backgroundColor: "#001F5B", color: "#fff" }}>
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Reset Password Result Modal ── */}
+      <Dialog open={resetOpen} onOpenChange={setResetOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Password Reset — New Credentials</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-4">
+            <p className="text-sm" style={{ color: "#9A9A9A" }}>
+              A new temporary password has been generated for <strong style={{ color: "#2C2C2C" }}>{resetResult?.name}</strong>.
+              They will be required to change it on next login.
+            </p>
+            <div className="rounded-lg p-4" style={{ backgroundColor: "#F4F4F6" }}>
+              <p className="text-xs font-semibold mb-1" style={{ color: "#9A9A9A" }}>NEW TEMPORARY PASSWORD</p>
+              <div className="flex items-center justify-between">
+                <p className="font-mono text-lg font-bold tracking-widest" style={{ color: "#001F5B" }}>
+                  {resetResult?.password}
+                </p>
+                <button
+                  onClick={() => copyToClipboard(resetResult?.password ?? "")}
+                  className="p-2 rounded-md hover:bg-gray-200 transition-colors"
+                >
+                  {copied ? <Check size={18} style={{ color: "#1A7F4B" }} /> : <Copy size={18} style={{ color: "#9A9A9A" }} />}
+                </button>
+              </div>
+            </div>
+            <p className="text-xs" style={{ color: "#E65100" }}>⚠ This won't be shown again.</p>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setResetOpen(false)} style={{ backgroundColor: "#001F5B", color: "#fff" }}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

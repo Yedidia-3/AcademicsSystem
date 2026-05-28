@@ -21,15 +21,35 @@ export class AdminService {
     });
   }
 
+  private generateTempPassword(): string {
+    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const lower = 'abcdefghjkmnpqrstuvwxyz';
+    const digits = '23456789';
+    const specials = '@#!$';
+    const rand = (s: string) => s[Math.floor(Math.random() * s.length)];
+    // Format: 2 upper + 3 lower + 2 digits + 1 special = 8 chars, always meets complexity
+    const pwd = rand(upper) + rand(upper) + rand(lower) + rand(lower) + rand(lower) + rand(digits) + rand(digits) + rand(specials);
+    // Shuffle
+    return pwd.split('').sort(() => 0.5 - Math.random()).join('');
+  }
+
   async createUser(dto: CreateUserDto) {
     const exists = await this.userRepo.findOne({ where: { email: dto.email } });
     if (exists) throw new BadRequestException('A user with this email already exists');
 
-    const hashed = await bcrypt.hash(dto.password, 10);
-    const user = this.userRepo.create({ ...dto, role: dto.role as any, password: hashed });
-    const saved = await this.userRepo.save(user) as any;
+    const tempPassword = this.generateTempPassword();
+    const hashed = await bcrypt.hash(tempPassword, 10);
+    const user = this.userRepo.create({
+      name: dto.name,
+      email: dto.email,
+      role: dto.role as any,
+      password: hashed,
+      must_change_password: true,
+    });
+    const saved = await this.userRepo.save(user);
     const { password, ...safe } = saved as any;
-    return safe;
+    // Return temp password ONCE so admin can share it with the user
+    return { ...safe, temp_password: tempPassword };
   }
 
   async updateUser(id: number, dto: UpdateUserDto) {
@@ -52,8 +72,9 @@ export class AdminService {
   async resetPassword(id: number) {
     const user = await this.userRepo.findOne({ where: { id } });
     if (!user) throw new NotFoundException('User not found');
-    const tempPassword = Math.random().toString(36).slice(-10);
+    const tempPassword = this.generateTempPassword();
     user.password = await bcrypt.hash(tempPassword, 10);
+    user.must_change_password = true;
     user.failed_login_attempts = 0;
     user.locked_until = null;
     await this.userRepo.save(user);

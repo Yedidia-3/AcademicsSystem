@@ -54,6 +54,22 @@ export class AuthService {
     return { token, user: safeUser };
   }
 
+  async changePassword(userId: number, currentPassword: string, newPassword: string) {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException();
+
+    const valid = await bcrypt.compare(currentPassword, user.password);
+    if (!valid) throw new BadRequestException('Current password is incorrect');
+
+    if (currentPassword === newPassword)
+      throw new BadRequestException('New password must be different from your current password');
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    user.must_change_password = false;
+    await this.userRepo.save(user);
+    return { message: 'Password changed successfully' };
+  }
+
   async me(userId: number) {
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user) throw new UnauthorizedException();

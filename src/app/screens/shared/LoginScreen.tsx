@@ -35,7 +35,11 @@ export function LoginScreen() {
         { email, password }
       );
       setAuth(res.user, res.token);
-      navigate(roleRoutes[res.user.role] ?? '/');
+      if (res.user.must_change_password) {
+        navigate('/change-password');
+      } else {
+        navigate(roleRoutes[res.user.role] ?? '/');
+      }
     } catch (err: any) {
       setError(err.message ?? "Invalid email or password");
     } finally {

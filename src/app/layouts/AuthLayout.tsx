@@ -68,6 +68,10 @@ export function AuthLayout() {
     return <Navigate to="/login" replace />;
   }
 
+  if (user?.must_change_password) {
+    return <Navigate to="/change-password" replace />;
+  }
+
   const currentRole = apiRoleToNavRole[user!.role] ?? "Dean";
 
   const displayUser = {
