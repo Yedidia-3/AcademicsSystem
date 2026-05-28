@@ -1,5 +1,6 @@
-import { Outlet, useNavigate, useLocation } from "react-router";
+import { Outlet, useNavigate, useLocation, Navigate } from "react-router";
 import { useState } from "react";
+import { useAuth } from "../../lib/auth";
 import { Bell, User, LogOut, Settings, LayoutDashboard, Users, FileText, GraduationCap, ClipboardCheck, BookOpen, DollarSign, Menu, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "../components/ui/avatar";
 import { Button } from "../components/ui/button";
@@ -49,43 +50,39 @@ const navItems = {
   ],
 };
 
+const apiRoleToNavRole: Record<string, keyof typeof navItems> = {
+  super_admin: "Super Admin",
+  dean: "Dean",
+  principal: "Principal",
+  teacher: "Teacher",
+  accountant: "Accountant",
+};
+
 export function AuthLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { user, logout, isAuthenticated } = useAuth();
 
-  // Determine role from current route
-  const getCurrentRole = (): keyof typeof navItems => {
-    const path = location.pathname;
-    if (path.startsWith("/admin")) return "Super Admin";
-    if (path.startsWith("/dean")) return "Dean";
-    if (path.startsWith("/principal")) return "Principal";
-    if (path.startsWith("/teacher")) return "Teacher";
-    if (path.startsWith("/accountant")) return "Accountant";
-    return "Dean"; // Default
-  };
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
 
-  const currentRole = getCurrentRole();
-  const mockUser = {
-    name: roleNames[currentRole] === "Dean of Studies" ? "John Doe" :
-          currentRole === "Super Admin" ? "Admin User" :
-          currentRole === "Principal" ? "Jane Smith" :
-          currentRole === "Teacher" ? "Mike Johnson" :
-          "Sarah Williams",
-    email: `${currentRole.toLowerCase().replace(" ", ".")}@jericho.rw`,
+  const currentRole = apiRoleToNavRole[user!.role] ?? "Dean";
+
+  const displayUser = {
+    name: user!.name,
+    email: user!.email,
     role: currentRole,
-    initials: currentRole === "Super Admin" ? "AU" :
-              currentRole === "Dean" ? "JD" :
-              currentRole === "Principal" ? "JS" :
-              currentRole === "Teacher" ? "MJ" : "SW",
-    unreadNotifications: 3,
+    initials: user!.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2),
+    unreadNotifications: 0,
   };
 
   const currentNavItems = navItems[currentRole];
   const isActive = (path: string) => location.pathname === path;
 
   const handleLogout = () => {
-    // TODO: Implement logout logic
+    logout();
     navigate("/login");
   };
 
@@ -136,11 +133,11 @@ export function AuthLayout() {
         <div className="p-4 border-t" style={{ borderColor: "rgba(255,255,255,0.1)" }}>
           <div className="flex items-center gap-3">
             <Avatar className="h-10 w-10" style={{ backgroundColor: "#800020" }}>
-              <AvatarFallback className="text-white">{mockUser.initials}</AvatarFallback>
+              <AvatarFallback className="text-white">{displayUser.initials}</AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <div className="text-white text-sm font-medium truncate">{mockUser.name}</div>
-              <div className="text-xs" style={{ color: "#9A9A9A" }}>{mockUser.role}</div>
+              <div className="text-white text-sm font-medium truncate">{displayUser.name}</div>
+              <div className="text-xs" style={{ color: "#9A9A9A" }}>{displayUser.role}</div>
             </div>
           </div>
         </div>
@@ -228,12 +225,12 @@ export function AuthLayout() {
               className="relative p-2 rounded-md hover:bg-gray-100 transition-colors"
             >
               <Bell size={20} style={{ color: "#C9A84C" }} />
-              {mockUser.unreadNotifications > 0 && (
+              {displayUser.unreadNotifications > 0 && (
                 <span
                   className="absolute -top-1 -right-1 h-5 w-5 rounded-full text-white text-xs flex items-center justify-center"
                   style={{ backgroundColor: "#800020" }}
                 >
-                  {mockUser.unreadNotifications}
+                  {displayUser.unreadNotifications}
                 </span>
               )}
             </button>
@@ -243,15 +240,15 @@ export function AuthLayout() {
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-3 hover:bg-gray-100 rounded-md p-2 transition-colors">
                   <Avatar className="h-8 w-8" style={{ backgroundColor: "#001F5B" }}>
-                    <AvatarFallback className="text-white text-sm">{mockUser.initials}</AvatarFallback>
+                    <AvatarFallback className="text-white text-sm">{displayUser.initials}</AvatarFallback>
                   </Avatar>
                   <div className="hidden sm:block text-left">
-                    <div className="text-sm font-medium" style={{ color: "#2C2C2C" }}>{mockUser.name}</div>
+                    <div className="text-sm font-medium" style={{ color: "#2C2C2C" }}>{displayUser.name}</div>
                     <div
                       className="text-xs px-2 py-0.5 rounded-full inline-block"
                       style={{ backgroundColor: "#800020", color: "#FFFFFF" }}
                     >
-                      {roleNames[mockUser.role] || mockUser.role}
+                      {roleNames[displayUser.role] || displayUser.role}
                     </div>
                   </div>
                 </button>

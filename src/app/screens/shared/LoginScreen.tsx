@@ -4,27 +4,20 @@ import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../../components/ui/select";
+import { api } from "../../../lib/api";
+import { useAuth, AuthUser, UserRole } from "../../../lib/auth";
 
-type Role = "Super Admin" | "Dean" | "Principal" | "Teacher" | "Accountant";
-
-const roleRoutes: Record<Role, string> = {
-  "Super Admin": "/admin/dashboard",
-  "Dean": "/dean/dashboard",
-  "Principal": "/principal/dashboard",
-  "Teacher": "/teacher/dashboard",
-  "Accountant": "/accountant/dashboard",
+const roleRoutes: Record<UserRole, string> = {
+  super_admin: "/admin/dashboard",
+  dean:        "/dean/dashboard",
+  principal:   "/principal/dashboard",
+  teacher:     "/teacher/dashboard",
+  accountant:  "/accountant/dashboard",
 };
 
 export function LoginScreen() {
   const navigate = useNavigate();
-  const [selectedRole, setSelectedRole] = useState<Role>("Dean");
+  const { setAuth } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -36,15 +29,18 @@ export function LoginScreen() {
     setError("");
     setLoading(true);
 
-    // Simulate login
-    setTimeout(() => {
-      if (email && password) {
-        navigate(roleRoutes[selectedRole]);
-      } else {
-        setError("Invalid email or password");
-        setLoading(false);
-      }
-    }, 1000);
+    try {
+      const res = await api.post<{ token: string; user: AuthUser }>(
+        '/api/v1/auth/login',
+        { email, password }
+      );
+      setAuth(res.user, res.token);
+      navigate(roleRoutes[res.user.role] ?? '/');
+    } catch (err: any) {
+      setError(err.message ?? "Invalid email or password");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -91,22 +87,6 @@ export function LoginScreen() {
 
           {/* Login Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <Label htmlFor="role">Select Role</Label>
-              <Select value={selectedRole} onValueChange={(value) => setSelectedRole(value as Role)}>
-                <SelectTrigger className="w-full h-11 mt-2" style={{ borderColor: "#9A9A9A" }}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Super Admin">Super Admin</SelectItem>
-                  <SelectItem value="Dean">Dean of Studies</SelectItem>
-                  <SelectItem value="Principal">Principal</SelectItem>
-                  <SelectItem value="Teacher">Teacher</SelectItem>
-                  <SelectItem value="Accountant">Accountant</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
             <div>
               <Label htmlFor="email">Email address</Label>
               <Input
@@ -185,7 +165,7 @@ export function LoginScreen() {
           <div className="mt-8 p-4 rounded-lg" style={{ backgroundColor: "#F4F4F6" }}>
             <p className="text-xs font-semibold mb-2" style={{ color: "#2C2C2C" }}>Demo Credentials:</p>
             <p className="text-xs" style={{ color: "#9A9A9A" }}>
-              Select any role above and use any email/password to sign in
+              Email: admin@jericho.rw &nbsp;|&nbsp; Password: password
             </p>
           </div>
         </div>
