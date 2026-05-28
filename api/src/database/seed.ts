@@ -41,11 +41,12 @@ async function seed() {
       email: 'admin@jericho.rw',
       password: hash,
       role: 'super_admin',
-      must_change_password: false, // Root user, no forced change
+      must_change_password: true, // Must set personal password on first login
     }));
     console.log('✓ Super Admin created');
     console.log('  Email:    admin@jericho.rw');
     console.log('  Password: Admin@Jericho2025!');
+    console.log('  → Will be forced to set a personal password on first login.');
   } else {
     console.log('✓ Super Admin already exists');
   }
