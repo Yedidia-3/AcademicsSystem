@@ -8,9 +8,14 @@ import { ResponseInterceptor } from './common/response.interceptor';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
+  // Auth uses Bearer tokens in Authorization header (not cookies),
+  // so credentials:true is not needed and breaks origin:* in browsers.
+  const frontendUrl = process.env.FRONTEND_URL;
   app.enableCors({
-    origin: process.env.FRONTEND_URL ?? '*',
-    credentials: true,
+    origin: frontendUrl
+      ? frontendUrl.split(',').map((u) => u.trim())
+      : true,  // reflect request origin in dev; set FRONTEND_URL in prod
+    credentials: false,
   });
 
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
