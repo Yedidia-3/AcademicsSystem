@@ -1,0 +1,54 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: jericho_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: jericho_school
+      POSTGRES_USER: jericho
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - jericho_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jericho -d jericho_school"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: jericho_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: jericho
+      DB_PASSWORD: secret
+      DB_NAME: jericho_school
+      JWT_SECRET: change_this_in_production
+      JWT_EXPIRES_IN: 2h
+      FRONTEND_URL: http://localhost:3000
+    ports:
+      - "3001:3001"
+    networks:
+      - jericho_network
+
+  # frontend: (not yet built — enable after Next.js portal is scaffolded)
+
+volumes:
+  postgres_data:
+
+networks:
+  jericho_network:
+    driver: bridge

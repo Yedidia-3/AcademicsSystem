@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+api/node_modules/
+frontend/node_modules/
+
+# Build output
+api/dist/
+dist/
+
+# Environment files (contains secrets)
+.env
+api/.env
+**/.env.local
+**/.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Vite / TypeScript cache
+*.tsbuildinfo
+.vite/
