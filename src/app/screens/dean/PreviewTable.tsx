@@ -24,10 +24,13 @@ interface StudentResult {
   is_manual_override: boolean;
 }
 
+interface ClassInfo { id: number; name: string; }
+
 interface PreviewData {
   session: { id: number; p_level: { id: number; name: string }; algorithm: string; status: string; };
   grouped: Record<string, StudentResult[]>;
   summary: { class: string; count: number }[];
+  classes?: ClassInfo[];
 }
 
 interface StaffUser { id: number; name: string; role: string; }
@@ -70,7 +73,14 @@ export function PreviewTable() {
 
   useEffect(() => { loadPreview(); }, [loadPreview]);
 
-  const classNames = preview ? Object.keys(preview.grouped) : [];
+  // Use the backend-provided class list for reliable id lookups; fall back to grouped keys
+  const classIdMap: Record<string, number> = {};
+  (preview?.classes ?? []).forEach(c => { classIdMap[c.name] = c.id; });
+
+  // Filter out any empty-string keys (safety net for corrupt data)
+  const classNames = preview
+    ? Object.keys(preview.grouped).filter(cn => cn.trim().length > 0)
+    : [];
   const classColorMap: Record<string, string> = {};
   classNames.forEach((cn, i) => { classColorMap[cn] = CLASS_COLORS[i % CLASS_COLORS.length]; });
 
@@ -223,7 +233,7 @@ export function PreviewTable() {
                         <DropdownMenuContent align="end">
                           {classNames.filter(cn => cn !== s.new_class).map(cn => (
                             <DropdownMenuItem key={cn}
-                              onClick={() => handleMoveStudent(s.result_id, preview.grouped[cn]?.[0]?.new_class_id ?? 0, cn)}>
+                              onClick={() => handleMoveStudent(s.result_id, classIdMap[cn] ?? 0, cn)}>
                               Move to {cn}
                             </DropdownMenuItem>
                           ))}

@@ -138,7 +138,7 @@ export class ShuffleService {
   }
 
   async getPreview(sessionId: number) {
-    // Load session + p_level first (simple direct join — always reliable)
+    // Load session + p_level first (direct join — always reliable)
     const session = await this.sessionRepo.findOne({
       where: { id: sessionId },
       relations: ['p_level'],
@@ -147,8 +147,18 @@ export class ShuffleService {
 
     const pLevelName = session.p_level?.name ?? '';
 
-    // Load results — avoid nested relation 'proposed_class.p_level' which can
-    // be unreliable in TypeORM; we already have the p-level name from session.
+    // Load the actual class records so we can return a reliable id→name map
+    const pLevelClasses = await this.classRepo.find({
+      where: { p_level_id: session.p_level_id, status: 'active' },
+      order: { name: 'ASC' },
+    });
+    const classes = pLevelClasses.map((c) => ({
+      id: c.id,
+      name: `${pLevelName}${c.name}`,
+    }));
+
+    // Load results — skip nested relation 'proposed_class.p_level' (unreliable
+    // in TypeORM for some versions); use pLevelName from session instead.
     const results = await this.resultRepo.find({
       where: { shuffle_session_id: sessionId },
       relations: ['student', 'student.current_class', 'proposed_class'],
@@ -157,7 +167,10 @@ export class ShuffleService {
 
     const grouped: Record<string, any[]> = {};
     for (const r of results) {
-      const label = `${pLevelName}${r.proposed_class?.name ?? ''}`;
+      // Skip orphaned results where the class relation didn't load
+      if (!r.proposed_class) continue;
+      const label = `${pLevelName}${r.proposed_class.name}`;
+      if (!label.trim()) continue; // never emit empty-string keys
       if (!grouped[label]) grouped[label] = [];
       grouped[label].push({
         result_id: r.id,
@@ -177,7 +190,7 @@ export class ShuffleService {
       count: rows.length,
     }));
 
-    return { session, grouped, summary };
+    return { session, grouped, summary, classes };
   }
 
   async adjustStudent(sessionId: number, resultId: number, newClassId: number) {
