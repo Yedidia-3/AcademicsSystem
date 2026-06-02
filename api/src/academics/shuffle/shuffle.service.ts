@@ -19,30 +19,35 @@ export class ShuffleService {
   ) {}
 
   async runShuffle(dto: RunShuffleDto, submittedBy: number) {
-    // Load students for this p_level ordered by rank, then sheet order
+    // Step 1: get the active classes for this p-level (same query as the count endpoint)
+    const pLevelClasses = await this.classRepo.find({
+      where: { p_level_id: dto.p_level_id, status: 'active' },
+      order: { name: 'ASC' },
+    });
+
+    if (!pLevelClasses.length) {
+      throw new BadRequestException('No classes found for this P-level. Please create classes or import students first.');
+    }
+
+    const classIds = pLevelClasses.map((c) => c.id);
+
+    // Step 2: load students using direct column comparison (same approach as student-count endpoint)
     const students = await this.studentRepo
       .createQueryBuilder('s')
-      .innerJoin('s.current_class', 'c')
-      .innerJoin('c.p_level', 'pl')
-      .where('pl.id = :pid', { pid: dto.p_level_id })
+      .leftJoinAndSelect('s.current_class', 'c')
+      .where('s.current_class_id IN (:...ids)', { ids: classIds })
       .andWhere('s.academic_year_id = :yid', { yid: dto.academic_year_id })
       .orderBy('s.rank', 'ASC', 'NULLS LAST')
       .addOrderBy('c.name', 'ASC')
       .addOrderBy('s.id', 'ASC')
       .getMany();
 
-    if (!students.length) throw new BadRequestException('No students found for this P-level');
+    if (!students.length) {
+      throw new BadRequestException('No students found for this P-level. Please import students first.');
+    }
 
-    // Load target classes — the classes WITHIN this same p-level (A, B, C).
-    // The shuffle redistributes students among the same p-level's classes.
-    const targetClasses = await this.classRepo
-      .createQueryBuilder('c')
-      .innerJoin('c.p_level', 'pl')
-      .where('pl.id = :pid', { pid: dto.p_level_id })
-      .andWhere('pl.academic_year_id = :yid', { yid: dto.academic_year_id })
-      .andWhere('c.status = :st', { st: 'active' })
-      .orderBy('c.name', 'ASC')
-      .getMany();
+    // Target classes = same p-level's classes (shuffle redistributes within P1 A/B/C)
+    const targetClasses = pLevelClasses;
 
     // For auto_promote with 1 class, just map 1:1
     const classCount = targetClasses.length || 1;
