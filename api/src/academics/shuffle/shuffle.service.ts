@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Class } from '../../entities/class.entity';
+import { PLevel } from '../../entities/p-level.entity';
 import { ShuffleResult } from '../../entities/shuffle-result.entity';
 import { ShuffleSession } from '../../entities/shuffle-session.entity';
 import { Student } from '../../entities/student.entity';
@@ -15,6 +16,7 @@ export class ShuffleService {
     @InjectRepository(ShuffleResult) private resultRepo: Repository<ShuffleResult>,
     @InjectRepository(Student) private studentRepo: Repository<Student>,
     @InjectRepository(Class) private classRepo: Repository<Class>,
+    @InjectRepository(PLevel) private pLevelRepo: Repository<PLevel>,
     private notificationsService: NotificationsService,
   ) {}
 
@@ -138,16 +140,15 @@ export class ShuffleService {
   }
 
   async getPreview(sessionId: number) {
-    // Load session + p_level first (direct join — always reliable)
-    const session = await this.sessionRepo.findOne({
-      where: { id: sessionId },
-      relations: ['p_level'],
-    });
+    // Load session by itself (no relation — avoids TypeORM relation bugs)
+    const session = await this.sessionRepo.findOne({ where: { id: sessionId } });
     if (!session) throw new NotFoundException('Shuffle session not found');
 
-    const pLevelName = session.p_level?.name ?? '';
+    // Load p_level directly using its own repo (100% reliable)
+    const pLevel = await this.pLevelRepo.findOne({ where: { id: session.p_level_id } });
+    const pLevelName = pLevel?.name ?? '';
 
-    // Load the actual class records so we can return a reliable id→name map
+    // Load classes directly (used for the id→name map returned to frontend)
     const pLevelClasses = await this.classRepo.find({
       where: { p_level_id: session.p_level_id, status: 'active' },
       order: { name: 'ASC' },
@@ -157,20 +158,22 @@ export class ShuffleService {
       name: `${pLevelName}${c.name}`,
     }));
 
-    // Load results — skip nested relation 'proposed_class.p_level' (unreliable
-    // in TypeORM for some versions); use pLevelName from session instead.
-    const results = await this.resultRepo.find({
-      where: { shuffle_session_id: sessionId },
-      relations: ['student', 'student.current_class', 'proposed_class'],
-      order: { proposed_class_id: 'ASC' },
-    });
+    // Load results via QueryBuilder with explicit joins (more reliable than
+    // find + relations option which silently fails on some TypeORM versions)
+    const results = await this.resultRepo
+      .createQueryBuilder('r')
+      .leftJoinAndSelect('r.student', 's')
+      .leftJoinAndSelect('s.current_class', 'sc')
+      .leftJoinAndSelect('r.proposed_class', 'pc')
+      .where('r.shuffle_session_id = :sid', { sid: sessionId })
+      .orderBy('r.proposed_class_id', 'ASC')
+      .getMany();
 
     const grouped: Record<string, any[]> = {};
     for (const r of results) {
-      // Skip orphaned results where the class relation didn't load
-      if (!r.proposed_class) continue;
+      if (!r.proposed_class) continue;                         // skip orphans
       const label = `${pLevelName}${r.proposed_class.name}`;
-      if (!label.trim()) continue; // never emit empty-string keys
+      if (!label.trim()) continue;                             // never emit ''
       if (!grouped[label]) grouped[label] = [];
       grouped[label].push({
         result_id: r.id,
@@ -190,7 +193,10 @@ export class ShuffleService {
       count: rows.length,
     }));
 
-    return { session, grouped, summary, classes };
+    // Attach pLevel to session object so the frontend interface stays intact
+    const sessionOut = { ...session, p_level: pLevel };
+
+    return { session: sessionOut, grouped, summary, classes };
   }
 
   async adjustStudent(sessionId: number, resultId: number, newClassId: number) {
