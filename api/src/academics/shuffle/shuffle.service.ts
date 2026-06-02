@@ -158,30 +158,52 @@ export class ShuffleService {
       name: `${pLevelName}${c.name}`,
     }));
 
-    // Load results via QueryBuilder with explicit joins (more reliable than
-    // find + relations option which silently fails on some TypeORM versions)
-    const results = await this.resultRepo
-      .createQueryBuilder('r')
-      .leftJoinAndSelect('r.student', 's')
-      .leftJoinAndSelect('s.current_class', 'sc')
-      .leftJoinAndSelect('r.proposed_class', 'pc')
-      .where('r.shuffle_session_id = :sid', { sid: sessionId })
-      .orderBy('r.proposed_class_id', 'ASC')
-      .getMany();
+    // Raw SQL — bypasses all TypeORM relation-mapping ambiguities completely.
+    // We join shuffle_results → students → classes manually and map to shape.
+    const rawRows: {
+      result_id: number;
+      student_id: number;
+      proposed_class_id: number;
+      is_manual_override: boolean;
+      student_name: string;
+      former_class: string | null;
+      rank: number | null;
+      marks_percentage: number | null;
+      sc_name: string | null;   // student's current class name
+      pc_name: string;           // proposed class name
+    }[] = await this.resultRepo.query(
+      `SELECT
+         r.id              AS result_id,
+         r.student_id,
+         r.proposed_class_id,
+         r.is_manual_override,
+         s.name            AS student_name,
+         s.former_class,
+         s.rank,
+         s.marks_percentage,
+         sc.name           AS sc_name,
+         pc.name           AS pc_name
+       FROM shuffle_results r
+       JOIN students   s  ON s.id  = r.student_id
+       JOIN classes    pc ON pc.id = r.proposed_class_id
+       LEFT JOIN classes sc ON sc.id = s.current_class_id
+       WHERE r.shuffle_session_id = $1
+       ORDER BY r.proposed_class_id ASC`,
+      [sessionId],
+    );
 
     const grouped: Record<string, any[]> = {};
-    for (const r of results) {
-      if (!r.proposed_class) continue;                         // skip orphans
-      const label = `${pLevelName}${r.proposed_class.name}`;
-      if (!label.trim()) continue;                             // never emit ''
+    for (const r of rawRows) {
+      const label = `${pLevelName}${r.pc_name ?? ''}`;
+      if (!label.trim()) continue;
       if (!grouped[label]) grouped[label] = [];
       grouped[label].push({
-        result_id: r.id,
-        student_id: r.student?.id,
-        name: r.student?.name ?? '—',
-        former_class: r.student?.former_class ?? r.student?.current_class?.name ?? '—',
-        rank: r.student?.rank,
-        marks_percentage: r.student?.marks_percentage,
+        result_id: r.result_id,
+        student_id: r.student_id,
+        name: r.student_name ?? '—',
+        former_class: r.former_class ?? r.sc_name ?? '—',
+        rank: r.rank,
+        marks_percentage: r.marks_percentage,
         new_class: label,
         new_class_id: r.proposed_class_id,
         is_manual_override: r.is_manual_override,
