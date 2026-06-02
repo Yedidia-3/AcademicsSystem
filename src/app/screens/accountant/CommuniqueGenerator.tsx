@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { FileText, Download, CheckSquare, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
@@ -187,7 +187,7 @@ export function CommuniqueGenerator() {
               </div>
             ) : (
               <>
-                <div className="border rounded-lg overflow-hidden" style={{ borderColor: "#E5E5E7" }}>
+                <div className="border rounded-lg overflow-x-auto" style={{ borderColor: "#E5E5E7" }}>
                   <Table>
                     <TableHeader style={{ backgroundColor: "#001F5B" }}>
                       <TableRow>
@@ -287,7 +287,7 @@ export function CommuniqueGenerator() {
             </div>
 
             {/* Selected students list */}
-            <div className="border rounded-lg overflow-hidden mb-6" style={{ borderColor: "#E5E5E7" }}>
+            <div className="border rounded-lg overflow-x-auto mb-6" style={{ borderColor: "#E5E5E7" }}>
               <Table>
                 <TableHeader style={{ backgroundColor: "#F4F4F6" }}>
                   <TableRow>

@@ -28,7 +28,6 @@ export function LoginScreen() {
     e.preventDefault();
     setError("");
     setLoading(true);
-
     try {
       const res = await api.post<{ token: string; user: AuthUser }>(
         '/api/v1/auth/login',
@@ -48,68 +47,90 @@ export function LoginScreen() {
   };
 
   return (
-    <div className="h-screen flex flex-col md:flex-row">
-      {/* Left Panel - Navy Blue */}
+    <div className="min-h-screen flex flex-col lg:flex-row" style={{ backgroundColor: "#F4F4F6" }}>
+
+      {/* ── Left branding panel (hidden on mobile, shown md+) ──────────────── */}
       <div
-        className="md:w-1/2 p-8 md:p-16 flex flex-col justify-center items-center relative overflow-hidden"
+        className="hidden lg:flex lg:w-2/5 xl:w-1/2 flex-col justify-center items-center relative overflow-hidden"
         style={{ backgroundColor: "#001F5B" }}
       >
-        {/* School Logo & Name */}
-        <div className="text-center z-10 space-y-4">
-          <div className="w-24 h-24 mx-auto rounded-full flex items-center justify-center mb-6" style={{ backgroundColor: "#800020" }}>
-            <svg viewBox="0 0 24 24" className="w-12 h-12 text-white" fill="currentColor">
+        {/* Top decorative circle */}
+        <div
+          className="absolute top-0 right-0 w-96 h-96 rounded-full opacity-10"
+          style={{ backgroundColor: "#800020", transform: "translate(30%, -30%)" }}
+        />
+
+        <div className="text-center z-10 px-12 space-y-6 max-w-md">
+          {/* Logo */}
+          <div className="w-28 h-28 mx-auto rounded-full flex items-center justify-center"
+            style={{ backgroundColor: "#800020" }}>
+            <svg viewBox="0 0 24 24" className="w-14 h-14 text-white" fill="currentColor">
               <path d="M12 3L1 9L12 15L21 10.09V17H23V9M5 13.18V17.18L12 21L19 17.18V13.18L12 17L5 13.18Z" />
             </svg>
           </div>
-          <h1 className="text-4xl font-bold text-white">Jericho School</h1>
-          <p className="text-lg" style={{ color: "#C9A84C" }}>School Management System</p>
+          <div>
+            <h1 className="text-4xl xl:text-5xl font-bold text-white leading-tight">
+              Jericho School
+            </h1>
+            <p className="text-xl mt-2" style={{ color: "#C9A84C" }}>Management System</p>
+          </div>
+          <p className="text-base leading-relaxed" style={{ color: "rgba(255,255,255,0.6)" }}>
+            Streamlined academic management for teachers, deans, principals, and staff.
+          </p>
         </div>
 
-        {/* Decorative element */}
+        {/* Bottom decorative circle */}
         <div
           className="absolute bottom-0 left-0 w-64 h-64 rounded-full opacity-10"
-          style={{ backgroundColor: "#800020", transform: "translate(-30%, 30%)" }}
+          style={{ backgroundColor: "#C9A84C", transform: "translate(-30%, 30%)" }}
         />
       </div>
 
-      {/* Right Panel - White */}
-      <div className="md:w-1/2 bg-white p-8 md:p-16 flex flex-col justify-center">
-        <div className="max-w-md mx-auto w-full">
-          {/* School crest */}
-          <div className="flex justify-center mb-6">
-            <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ backgroundColor: "#F4F4F6" }}>
-              <svg viewBox="0 0 24 24" className="w-6 h-6" style={{ color: "#800020" }} fill="currentColor">
+      {/* ── Right form panel ─────────────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col justify-center items-center px-6 py-12 sm:px-12 lg:px-16 xl:px-24">
+        <div className="w-full max-w-md">
+
+          {/* Mobile-only logo */}
+          <div className="flex flex-col items-center mb-8 lg:hidden">
+            <div className="w-16 h-16 rounded-full flex items-center justify-center mb-3"
+              style={{ backgroundColor: "#001F5B" }}>
+              <svg viewBox="0 0 24 24" className="w-8 h-8 text-white" fill="currentColor">
                 <path d="M12 3L1 9L12 15L21 10.09V17H23V9M5 13.18V17.18L12 21L19 17.18V13.18L12 17L5 13.18Z" />
               </svg>
             </div>
+            <h1 className="text-xl font-bold" style={{ color: "#001F5B" }}>Jericho School</h1>
+            <p className="text-sm" style={{ color: "#9A9A9A" }}>Management System</p>
           </div>
 
-          <div className="text-center mb-8">
-            <h2 className="text-2xl font-semibold mb-2" style={{ color: "#2C2C2C" }}>Welcome back</h2>
-            <p className="text-sm" style={{ color: "#9A9A9A" }}>Sign in to your account</p>
+          {/* Heading */}
+          <div className="mb-8">
+            <h2 className="text-3xl font-bold" style={{ color: "#2C2C2C" }}>Welcome back</h2>
+            <p className="mt-2 text-base" style={{ color: "#9A9A9A" }}>Sign in to your account</p>
           </div>
 
-          {/* Login Form */}
+          {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <Label htmlFor="email">Email address</Label>
+              <Label htmlFor="email" className="text-sm font-medium" style={{ color: "#2C2C2C" }}>
+                Email address
+              </Label>
               <Input
                 id="email"
                 type="email"
                 placeholder="you@jericho.rw"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-2 h-11"
-                style={{
-                  borderColor: error ? "#C0392B" : "#9A9A9A",
-                  backgroundColor: "#FFFFFF",
-                }}
+                className="mt-2 h-12 text-base"
+                style={{ borderColor: error ? "#C0392B" : "#E5E5E7" }}
                 required
+                autoComplete="email"
               />
             </div>
 
             <div>
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password" className="text-sm font-medium" style={{ color: "#2C2C2C" }}>
+                Password
+              </Label>
               <div className="relative mt-2">
                 <Input
                   id="password"
@@ -117,18 +138,17 @@ export function LoginScreen() {
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="h-11 pr-10"
-                  style={{
-                    borderColor: error ? "#C0392B" : "#9A9A9A",
-                    backgroundColor: "#FFFFFF",
-                  }}
+                  className="h-12 text-base pr-11"
+                  style={{ borderColor: error ? "#C0392B" : "#E5E5E7" }}
                   required
+                  autoComplete="current-password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded"
                   style={{ color: "#9A9A9A" }}
+                  tabIndex={-1}
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -136,42 +156,29 @@ export function LoginScreen() {
             </div>
 
             {error && (
-              <div className="p-3 rounded-md text-sm" style={{ backgroundColor: "#FEE", color: "#C0392B" }}>
+              <div className="p-4 rounded-lg text-sm" style={{ backgroundColor: "#FEE2E2", color: "#C0392B" }}>
                 {error}
               </div>
             )}
 
             <Button
               type="submit"
-              className="w-full h-12 font-semibold"
-              style={{
-                backgroundColor: "#800020",
-                color: "#FFFFFF",
-              }}
+              className="w-full h-12 text-base font-semibold"
+              style={{ backgroundColor: "#800020", color: "#FFFFFF" }}
               disabled={loading}
             >
               {loading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Signing in...
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Signing in…
                 </>
-              ) : (
-                "Sign In"
-              )}
+              ) : "Sign In"}
             </Button>
 
             <p className="text-center text-sm" style={{ color: "#9A9A9A" }}>
-              Forgot password? Contact your administrator
+              Forgot your password? Contact your administrator.
             </p>
           </form>
-
-          {/* Quick login hints for demo */}
-          <div className="mt-8 p-4 rounded-lg" style={{ backgroundColor: "#F4F4F6" }}>
-            <p className="text-xs font-semibold mb-2" style={{ color: "#2C2C2C" }}>Demo Credentials:</p>
-            <p className="text-xs" style={{ color: "#9A9A9A" }}>
-              Email: admin@jericho.rw &nbsp;|&nbsp; Password: password
-            </p>
-          </div>
         </div>
       </div>
     </div>

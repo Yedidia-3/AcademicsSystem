@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router";
 import { Search, Download, ArrowLeft, Loader2 } from "lucide-react";
 import { Card, CardContent } from "../../components/ui/card";
@@ -167,7 +167,7 @@ export function StudentListPerClass() {
                     </div>
                   ) : (
                     <>
-                      <div className="border rounded-lg overflow-hidden" style={{ borderColor: "#E5E5E7" }}>
+                      <div className="border rounded-lg overflow-x-auto" style={{ borderColor: "#E5E5E7" }}>
                         <Table>
                           <TableHeader style={{ backgroundColor: "#001F5B" }}>
                             <TableRow>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+﻿import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router";
 import { CheckCircle, ArrowLeft, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
@@ -168,7 +168,7 @@ export function DistributionScreen() {
               </p>
             </div>
           )}
-          <div className="border rounded-lg overflow-hidden" style={{ borderColor: "#E5E5E7" }}>
+          <div className="border rounded-lg overflow-x-auto" style={{ borderColor: "#E5E5E7" }}>
             <Table>
               <TableHeader style={{ backgroundColor: "#001F5B" }}>
                 <TableRow>

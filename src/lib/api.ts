@@ -19,10 +19,14 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
       window.location.href = '/login';
     }
     const err = await res.json().catch(() => ({}));
-    throw new Error(err?.message ?? `Request failed: ${res.status}`);
+    // Unwrap error from NestJS interceptor envelope { success, data, message }
+    throw new Error(err?.message ?? err?.data?.message ?? `Request failed: ${res.status}`);
   }
 
-  return res.json();
+  const json = await res.json();
+  // NestJS ResponseInterceptor wraps every response as { success, data, message }.
+  // Unwrap transparently so callers get the raw payload.
+  return (json?.data !== undefined ? json.data : json) as T;
 }
 
 export const api = {

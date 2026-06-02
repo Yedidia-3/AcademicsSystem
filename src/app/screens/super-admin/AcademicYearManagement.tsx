@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { Calendar, AlertTriangle, Plus, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
@@ -114,7 +114,7 @@ export function AcademicYearManagement() {
         <Card style={{ borderColor: "#E5E5E7" }}>
           <CardHeader><CardTitle>Archived Years</CardTitle></CardHeader>
           <CardContent>
-            <div className="border rounded-lg overflow-hidden" style={{ borderColor: "#E5E5E7" }}>
+            <div className="border rounded-lg overflow-x-auto" style={{ borderColor: "#E5E5E7" }}>
               <Table>
                 <TableHeader style={{ backgroundColor: "#001F5B" }}>
                   <TableRow>

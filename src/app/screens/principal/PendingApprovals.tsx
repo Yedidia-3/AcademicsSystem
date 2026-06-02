@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { Search, CheckCircle, Loader2 } from "lucide-react";
 import { Card, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
@@ -107,7 +107,7 @@ export function PendingApprovals() {
               </p>
             </div>
           ) : (
-            <div className="border rounded-lg overflow-hidden" style={{ borderColor: "#E5E5E7" }}>
+            <div className="border rounded-lg overflow-x-auto" style={{ borderColor: "#E5E5E7" }}>
               <Table>
                 <TableHeader style={{ backgroundColor: "#001F5B" }}>
                   <TableRow>
