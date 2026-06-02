@@ -33,12 +33,14 @@ export class ShuffleService {
 
     if (!students.length) throw new BadRequestException('No students found for this P-level');
 
-    // Load target classes (next p_level)
+    // Load target classes — the classes WITHIN this same p-level (A, B, C).
+    // The shuffle redistributes students among the same p-level's classes.
     const targetClasses = await this.classRepo
       .createQueryBuilder('c')
       .innerJoin('c.p_level', 'pl')
-      .where('pl.academic_year_id = :yid', { yid: dto.academic_year_id })
-      .andWhere('pl.id != :pid', { pid: dto.p_level_id })
+      .where('pl.id = :pid', { pid: dto.p_level_id })
+      .andWhere('pl.academic_year_id = :yid', { yid: dto.academic_year_id })
+      .andWhere('c.status = :st', { st: 'active' })
       .orderBy('c.name', 'ASC')
       .getMany();
 

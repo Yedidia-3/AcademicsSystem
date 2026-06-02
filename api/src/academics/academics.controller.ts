@@ -55,6 +55,15 @@ export class AcademicsController {
     return this.academicsService.listClasses(+id);
   }
 
+  @Get('p-levels/:id/student-count')
+  @Roles('dean', 'principal', 'teacher', 'accountant')
+  getStudentCount(
+    @Param('id') id: string,
+    @Query('academic_year_id') yearId: string,
+  ) {
+    return this.academicsService.getStudentCountForPLevel(+id, +yearId);
+  }
+
   @Post('classes')
   @Roles('dean')
   createClass(@Body('name') name: string, @Body('p_level_id') pLevelId: number) {

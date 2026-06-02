@@ -93,6 +93,20 @@ export class AcademicsService {
     });
   }
 
+  async getStudentCountForPLevel(pLevelId: number, academicYearId: number) {
+    const classes = await this.classRepo.find({
+      where: { p_level_id: pLevelId, status: 'active' },
+    });
+    if (!classes.length) return { count: 0 };
+    const classIds = classes.map((c) => c.id);
+    const count = await this.studentRepo
+      .createQueryBuilder('s')
+      .where('s.current_class_id IN (:...ids)', { ids: classIds })
+      .andWhere('s.academic_year_id = :yid', { yid: academicYearId })
+      .getCount();
+    return { count };
+  }
+
   async moveStudent(studentId: number, newClassId: number) {
     const student = await this.studentRepo.findOne({ where: { id: studentId } });
     if (!student) throw new NotFoundException('Student not found');
