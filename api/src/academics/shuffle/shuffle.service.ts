@@ -138,35 +138,44 @@ export class ShuffleService {
   }
 
   async getPreview(sessionId: number) {
-    const results = await this.resultRepo.find({
-      where: { shuffle_session_id: sessionId },
-      relations: ['student', 'student.current_class', 'proposed_class', 'proposed_class.p_level'],
-      order: { proposed_class_id: 'ASC' },
-    });
-
+    // Load session + p_level first (simple direct join — always reliable)
     const session = await this.sessionRepo.findOne({
       where: { id: sessionId },
       relations: ['p_level'],
     });
+    if (!session) throw new NotFoundException('Shuffle session not found');
+
+    const pLevelName = session.p_level?.name ?? '';
+
+    // Load results — avoid nested relation 'proposed_class.p_level' which can
+    // be unreliable in TypeORM; we already have the p-level name from session.
+    const results = await this.resultRepo.find({
+      where: { shuffle_session_id: sessionId },
+      relations: ['student', 'student.current_class', 'proposed_class'],
+      order: { proposed_class_id: 'ASC' },
+    });
 
     const grouped: Record<string, any[]> = {};
     for (const r of results) {
-      const label = `${r.proposed_class.p_level.name}${r.proposed_class.name}`;
+      const label = `${pLevelName}${r.proposed_class?.name ?? ''}`;
       if (!grouped[label]) grouped[label] = [];
       grouped[label].push({
         result_id: r.id,
-        student_id: r.student.id,
-        name: r.student.name,
-        former_class: r.student.former_class ?? r.student.current_class?.name,
-        rank: r.student.rank,
-        marks_percentage: r.student.marks_percentage,
+        student_id: r.student?.id,
+        name: r.student?.name ?? '—',
+        former_class: r.student?.former_class ?? r.student?.current_class?.name ?? '—',
+        rank: r.student?.rank,
+        marks_percentage: r.student?.marks_percentage,
         new_class: label,
         new_class_id: r.proposed_class_id,
         is_manual_override: r.is_manual_override,
       });
     }
 
-    const summary = Object.entries(grouped).map(([label, rows]) => ({ class: label, count: rows.length }));
+    const summary = Object.entries(grouped).map(([label, rows]) => ({
+      class: label,
+      count: rows.length,
+    }));
 
     return { session, grouped, summary };
   }
