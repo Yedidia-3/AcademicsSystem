@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useAuth } from "../../lib/auth";
 import {
   Bell, User, LogOut, Settings, LayoutDashboard, Users, FileText,
-  GraduationCap, ClipboardCheck, BookOpen, DollarSign, Menu, X,
+  GraduationCap, ClipboardCheck, BookOpen, DollarSign, Menu, X, Share2,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "../components/ui/avatar";
 import { Button } from "../components/ui/button";
@@ -31,6 +31,7 @@ const navItems = {
     { icon: LayoutDashboard, label: "Dashboard",          path: "/dean/dashboard" },
     { icon: GraduationCap,   label: "P-Levels",           path: "/dean/p-levels" },
     { icon: FileText,        label: "Import Data",         path: "/dean/import" },
+    { icon: Share2,          label: "Distribution",        path: "/dean/distribution" },
     { icon: Settings,        label: "Mid-Term Adjustments",path: "/dean/mid-term-adjustment" },
   ],
   principal: [

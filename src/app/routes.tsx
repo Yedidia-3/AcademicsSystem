@@ -22,6 +22,7 @@ import { ExcelImport } from "./screens/dean/ExcelImport";
 import { AlgorithmSelection } from "./screens/dean/AlgorithmSelection";
 import { PreviewTable } from "./screens/dean/PreviewTable";
 import { DistributionScreen } from "./screens/dean/DistributionScreen";
+import { DistributionList } from "./screens/dean/DistributionList";
 import { MidTermAdjustment } from "./screens/dean/MidTermAdjustment";
 
 // Principal screens
@@ -105,6 +106,10 @@ export const router = createBrowserRouter([
       {
         path: "dean/preview/:sessionId",
         Component: PreviewTable,
+      },
+      {
+        path: "dean/distribution",
+        Component: DistributionList,
       },
       {
         path: "dean/distribute/:sessionId",

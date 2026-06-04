@@ -327,10 +327,48 @@ export class ShuffleService {
   }
 
   async getPendingApprovals() {
-    return this.sessionRepo.find({
-      where: { status: 'pending_approval' },
-      relations: ['p_level', 'submitted_by_user'],
-      order: { submitted_at: 'ASC' },
-    });
+    // Raw SQL for reliability (TypeORM relation loading is flaky on this schema)
+    const rows = await this.sessionRepo.query(
+      `SELECT ss.id, ss.status, ss.algorithm, ss.p_level_id,
+              ss.submitted_at, ss.reviewed_at, ss.distributed_at, ss.rejection_note,
+              pl.name AS p_level_name,
+              u.name  AS submitted_by_name,
+              (SELECT COUNT(*) FROM shuffle_results r WHERE r.shuffle_session_id = ss.id) AS student_count
+       FROM shuffle_sessions ss
+       JOIN p_levels pl ON pl.id = ss.p_level_id
+       LEFT JOIN users u ON u.id = ss.submitted_by
+       WHERE ss.status = 'pending_approval'
+       ORDER BY ss.submitted_at ASC`,
+    );
+    return rows.map(this.mapSessionRow);
   }
+
+  // Lists every shuffle session (for the Dean's Distribution module)
+  async getDeanSessions() {
+    const rows = await this.sessionRepo.query(
+      `SELECT ss.id, ss.status, ss.algorithm, ss.p_level_id,
+              ss.submitted_at, ss.reviewed_at, ss.distributed_at, ss.rejection_note,
+              pl.name AS p_level_name,
+              u.name  AS submitted_by_name,
+              (SELECT COUNT(*) FROM shuffle_results r WHERE r.shuffle_session_id = ss.id) AS student_count
+       FROM shuffle_sessions ss
+       JOIN p_levels pl ON pl.id = ss.p_level_id
+       LEFT JOIN users u ON u.id = ss.submitted_by
+       ORDER BY ss.updated_at DESC`,
+    );
+    return rows.map(this.mapSessionRow);
+  }
+
+  private mapSessionRow = (r: any) => ({
+    id: r.id,
+    status: r.status,
+    algorithm: r.algorithm,
+    p_level: { id: r.p_level_id, name: r.p_level_name },
+    submitted_by_name: r.submitted_by_name,
+    student_count: Number(r.student_count ?? 0),
+    submitted_at: r.submitted_at,
+    reviewed_at: r.reviewed_at,
+    distributed_at: r.distributed_at,
+    rejection_note: r.rejection_note,
+  });
 }

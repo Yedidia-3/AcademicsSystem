@@ -81,4 +81,11 @@ export class ShuffleController {
   getPending() {
     return this.shuffleService.getPendingApprovals();
   }
+
+  // Dean's Distribution module — lists all shuffle sessions with their status
+  @Get('sessions')
+  @Roles('dean')
+  getDeanSessions() {
+    return this.shuffleService.getDeanSessions();
+  }
 }
