@@ -174,16 +174,6 @@
     @apply bg-background text-foreground;
   }
 
-  /* ── Responsive tables ────────────────────────────────────────────────────
-   * Any div that wraps a <table> and has `overflow-hidden` (shadcn pattern)
-   * gets an inner scroll context on small screens without breaking borders.
-   * ---------------------------------------------------------------------- */
-  .table-scroll {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-}
-
   /**
   * Jericho School typography styles
   * h1: 28px/700 - Page titles
