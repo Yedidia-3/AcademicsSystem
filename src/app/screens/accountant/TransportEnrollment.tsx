@@ -8,23 +8,48 @@ import { Checkbox } from "../../components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../../components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../components/ui/dialog";
+import { Label } from "../../components/ui/label";
 import { api } from "../../../lib/api";
 import { toast } from "sonner";
 import { useAutoRefresh } from "../../../lib/useAutoRefresh";
 
 interface Zone { id: number; name: string; price: number; }
 
+interface PaymentCell { paid_on: string; months: number; expires_on: string; }
+
 interface Enrollment {
   id: number;
   student_id: number;
   zone_id: number | null;
-  payments: Record<string, boolean>;
+  payments: Record<string, PaymentCell>;
   student: {
     id: number;
     name: string;
     current_class: { id: number; name: string; p_level: { id: number; name: string } | null } | null;
   } | null;
 }
+
+function addMonths(dateStr: string, months: number): string {
+  const d = new Date(dateStr);
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().split('T')[0];
+}
+function cellState(cell?: PaymentCell): "none" | "active" | "soon" | "expired" {
+  if (!cell) return "none";
+  const today = new Date().toISOString().split('T')[0];
+  if (cell.expires_on < today) return "expired";
+  const soon = new Date(); soon.setDate(soon.getDate() + 3);
+  if (cell.expires_on <= soon.toISOString().split('T')[0]) return "soon";
+  return "active";
+}
+const STATE_COLOR: Record<string, string> = { active: "#1A7F4B", soon: "#D97706", expired: "#C0392B" };
+const DURATION_OPTIONS = [
+  { label: "1 month", months: 1 },
+  { label: "2 months", months: 2 },
+  { label: "3 months", months: 3 },
+  { label: "Full term (4 months)", months: 4 },
+];
 
 const MONTHS = [1, 2, 3, 4];
 const MONTH_LABEL = ["1st", "2nd", "3rd", "4th"];
@@ -47,6 +72,10 @@ export function TransportEnrollment() {
   const [pLevelFilter, setPLevelFilter] = useState<string>("all");
   const [classFilter, setClassFilter] = useState<string>("all");
   const [savingId, setSavingId] = useState<number | null>(null);
+
+  const [payTarget, setPayTarget] = useState<{ e: Enrollment; key: string; label: string } | null>(null);
+  const [payDate, setPayDate] = useState("");
+  const [payMonths, setPayMonths] = useState<string>("1");
 
   const load = useCallback(async () => {
     try {
@@ -83,11 +112,7 @@ export function TransportEnrollment() {
     return matchSearch && matchPLevel && matchClass;
   });
 
-  const togglePayment = async (e: Enrollment, month: number) => {
-    if (!e.zone_id) { toast.error('Assign a zone before recording payment'); return; }
-    const key = `${month}`;
-    const next = { ...(e.payments ?? {}) };
-    if (next[key]) delete next[key]; else next[key] = true;
+  const savePayments = async (e: Enrollment, next: Record<string, PaymentCell>) => {
     setEnrollments(prev => prev.map(x => x.id === e.id ? { ...x, payments: next } : x));
     setSavingId(e.id);
     try {
@@ -98,6 +123,29 @@ export function TransportEnrollment() {
     } finally {
       setSavingId(null);
     }
+  };
+
+  const onToggle = (e: Enrollment, month: number) => {
+    if (!e.zone_id) { toast.error('Assign a zone before recording payment'); return; }
+    const key = `${month}`;
+    if (e.payments?.[key]) {
+      const next = { ...e.payments };
+      delete next[key];
+      savePayments(e, next);
+    } else {
+      setPayTarget({ e, key, label: `${e.student?.name ?? ''} · Month ${month} Transport` });
+      setPayDate(new Date().toISOString().split('T')[0]);
+      setPayMonths("1");
+    }
+  };
+
+  const confirmPayment = () => {
+    if (!payTarget || !payDate) return;
+    const months = +payMonths;
+    const cell: PaymentCell = { paid_on: payDate, months, expires_on: addMonths(payDate, months) };
+    const next = { ...(payTarget.e.payments ?? {}), [payTarget.key]: cell };
+    savePayments(payTarget.e, next);
+    setPayTarget(null);
   };
 
   const setZone = async (e: Enrollment, zoneId: string) => {
@@ -126,7 +174,7 @@ export function TransportEnrollment() {
   const handleExport = () => {
     const header = "Name,Class,Zone," + MONTHS.map(m => `M${m}`).join(",") + "\n";
     const rows = filtered.map(e => {
-      const cells = MONTHS.map(m => e.payments?.[`${m}`] ? "Paid" : "");
+      const cells = MONTHS.map(m => e.payments?.[`${m}`]?.expires_on ? `exp ${e.payments[`${m}`].expires_on}` : "");
       return `"${e.student?.name ?? ''}","${classLabel(e)}","${zoneName(e.zone_id) ?? ''}",${cells.map(c => `"${c}"`).join(",")}`;
     }).join("\n");
     const blob = new Blob([header + rows], { type: 'text/csv' });
@@ -224,17 +272,26 @@ export function TransportEnrollment() {
                         <span className="px-2 py-1 rounded text-xs font-semibold text-white"
                           style={{ backgroundColor: "#001F5B" }}>{classLabel(e)}</span>
                       </TableCell>
-                      {MONTHS.map(m => (
-                        <TableCell key={m} className="text-center">
-                          <div className="flex justify-center">
-                            <Checkbox
-                              checked={!!e.payments?.[`${m}`]}
-                              disabled={!e.zone_id}
-                              onCheckedChange={() => togglePayment(e, m)}
-                            />
-                          </div>
-                        </TableCell>
-                      ))}
+                      {MONTHS.map(m => {
+                        const cell = e.payments?.[`${m}`];
+                        const state = cellState(cell);
+                        return (
+                          <TableCell key={m} className="text-center">
+                            <div className="flex flex-col items-center gap-0.5"
+                              title={cell ? `Paid ${cell.paid_on} · expires ${cell.expires_on}` : (e.zone_id ? 'Not paid' : 'Assign a zone first')}>
+                              <Checkbox
+                                checked={!!cell}
+                                disabled={!e.zone_id}
+                                onCheckedChange={() => onToggle(e, m)}
+                              />
+                              {cell && (
+                                <span className="w-1.5 h-1.5 rounded-full"
+                                  style={{ backgroundColor: STATE_COLOR[state] }} />
+                              )}
+                            </div>
+                          </TableCell>
+                        );
+                      })}
                       <TableCell>
                         <Select value={e.zone_id ? String(e.zone_id) : ""} onValueChange={(v) => setZone(e, v)}>
                           <SelectTrigger className="w-32 h-9">
@@ -274,6 +331,51 @@ export function TransportEnrollment() {
           )}
         </CardContent>
       </Card>
+
+      {/* Payment date dialog */}
+      <Dialog open={!!payTarget} onOpenChange={(o) => !o && setPayTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Record Payment</DialogTitle>
+            <DialogDescription>{payTarget?.label}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label>Payment Date</Label>
+              <Input type="date" value={payDate} onChange={e => setPayDate(e.target.value)}
+                className="mt-2 h-11" />
+            </div>
+            <div>
+              <Label>Duration</Label>
+              <Select value={payMonths} onValueChange={setPayMonths}>
+                <SelectTrigger className="w-full h-11 mt-2"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {DURATION_OPTIONS.map(o => (
+                    <SelectItem key={o.months} value={String(o.months)}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {payDate && (
+              <div className="p-3 rounded-lg" style={{ backgroundColor: "#F0FDF4" }}>
+                <p className="text-sm" style={{ color: "#1A7F4B" }}>
+                  <strong>Expires on:</strong> {new Date(addMonths(payDate, +payMonths)).toLocaleDateString()}
+                </p>
+                <p className="text-xs mt-1" style={{ color: "#15803D" }}>
+                  You'll be reminded as this date approaches.
+                </p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setPayTarget(null)}>Cancel</Button>
+            <Button onClick={confirmPayment} disabled={!payDate}
+              style={{ backgroundColor: "#800020", color: "#FFFFFF" }}>
+              Save Payment
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

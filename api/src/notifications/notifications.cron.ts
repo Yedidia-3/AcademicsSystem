@@ -25,17 +25,13 @@ export class ExpiryCheckerCron {
 
     for (const days of [3, 2, 1, 0]) {
       const expiring = await this.accountantService.getEnrollmentsExpiringInDays(days);
-      for (const enrollment of expiring) {
-        const serviceLabel = enrollment.type === 'feeding'
-          ? enrollment.meal_type === 'breakfast' ? 'Breakfast' : enrollment.meal_type === 'lunch' ? 'Lunch' : 'Feeding'
-          : 'Transport';
-
+      for (const item of expiring) {
         const message = days === 0
-          ? `${enrollment.student.name} — ${serviceLabel} subscription has expired today.`
-          : `${enrollment.student.name} — ${serviceLabel} subscription expires in ${days} day${days > 1 ? 's' : ''}.`;
+          ? `${item.studentName} — ${item.label} payment has expired today.`
+          : `${item.studentName} — ${item.label} payment expires in ${days} day${days > 1 ? 's' : ''}.`;
 
         for (const accountant of accountants) {
-          await this.notificationsService.notify(accountant.id, message);
+          await this.notificationsService.notify(accountant.id, message, days === 0 ? 'error' : 'warning');
         }
       }
     }

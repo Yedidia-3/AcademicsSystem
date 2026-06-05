@@ -46,15 +46,9 @@ export class AccountantService {
 
   // ─── Enrollments ─────────────────────────────────────────────────────────────
 
-  async listEnrollments(type?: 'feeding' | 'transport') {
-    // Raw SQL — nested TypeORM relations (student.current_class.p_level) load
-    // unreliably on this schema and silently return null, which makes the
-    // enrollment screens appear empty. This always returns the full shape.
-    const params: any[] = [];
-    let typeClause = '';
-    if (type) { params.push(type); typeClause = `AND e.type = $${params.length}`; }
-
-    const rows = await this.enrollmentRepo.query(
+  // Shared raw query — nested TypeORM relations load unreliably on this schema.
+  private async rawEnrollments(typeClause = '', params: any[] = []) {
+    return this.enrollmentRepo.query(
       `SELECT e.id, e.student_id, e.type, e.meal_type, e.zone_id, e.payments,
               e.payment_date::text  AS payment_date,
               e.duration_days,
@@ -73,7 +67,25 @@ export class AccountantService {
        ORDER BY e.created_at DESC`,
       params,
     );
+  }
+
+  async listEnrollments(type?: 'feeding' | 'transport') {
+    const params: any[] = [];
+    let typeClause = '';
+    if (type) { params.push(type); typeClause = `AND e.type = $${params.length}`; }
+    const rows = await this.rawEnrollments(typeClause, params);
     return rows.map(this.mapEnrollmentRow);
+  }
+
+  // Human label for a payment cell key. Feeding: "1B"->"Month 1 Breakfast".
+  // Transport: "1"->"Month 1".
+  private cellLabel(type: string, key: string): string {
+    const month = key.replace(/[BL]$/, '');
+    if (type === 'feeding') {
+      const meal = key.endsWith('B') ? 'Breakfast' : key.endsWith('L') ? 'Lunch' : '';
+      return `Month ${month} ${meal}`.trim();
+    }
+    return `Month ${month} Transport`;
   }
 
   private mapEnrollmentRow = (r: any) => ({
@@ -159,13 +171,23 @@ export class AccountantService {
     return { created, skipped, total: dto.student_ids.length };
   }
 
-  // Replace the monthly payment grid for one enrollment.
-  async updatePayments(id: number, payments: Record<string, boolean>) {
+  // Replace the monthly payment grid for one enrollment. Each cell value is an
+  // object { paid_on, months, expires_on } so we can track expiry per payment.
+  async updatePayments(id: number, payments: Record<string, any>) {
     const e = await this.enrollmentRepo.findOne({ where: { id } });
     if (!e) throw new NotFoundException('Enrollment not found');
-    // keep only truthy keys to stay tidy
-    const clean: Record<string, boolean> = {};
-    for (const [k, v] of Object.entries(payments ?? {})) if (v) clean[k] = true;
+    const clean: Record<string, any> = {};
+    for (const [k, v] of Object.entries(payments ?? {})) {
+      if (!v) continue;
+      if (typeof v === 'object' && v.paid_on) {
+        clean[k] = { paid_on: v.paid_on, months: v.months ?? 1, expires_on: v.expires_on };
+      } else {
+        // backward-compatible: a bare truthy becomes a 1-month payment from today
+        const paidOn = new Date().toISOString().split('T')[0];
+        const exp = new Date(); exp.setMonth(exp.getMonth() + 1);
+        clean[k] = { paid_on: paidOn, months: 1, expires_on: exp.toISOString().split('T')[0] };
+      }
+    }
     e.payments = clean;
     await this.enrollmentRepo.save(e);
     return { id, payments: clean };
@@ -201,6 +223,9 @@ export class AccountantService {
     return { message: 'Enrollment archived' };
   }
 
+  // Expand each enrollment's payment cells; return one row per cell whose
+  // expires_on falls within [today, today+daysAhead]. Shape matches the
+  // enrollment screens (meal_type derived from the cell key).
   async getExpiringEnrollments(daysAhead = 3) {
     const today = new Date();
     const cutoff = new Date();
@@ -208,39 +233,51 @@ export class AccountantService {
     const todayStr = today.toISOString().split('T')[0];
     const cutoffStr = cutoff.toISOString().split('T')[0];
 
-    const rows = await this.enrollmentRepo.query(
-      `SELECT e.id, e.student_id, e.type, e.meal_type, e.zone_id, e.payments,
-              e.payment_date::text  AS payment_date,
-              e.duration_days,
-              e.expiry_date::text   AS expiry_date,
-              e.status,
-              s.name AS student_name,
-              c.id   AS class_id,   c.name AS class_name,
-              pl.id  AS p_level_id, pl.name AS p_level_name,
-              z.id   AS zone_pk,    z.name AS zone_name, z.price AS zone_price
-       FROM enrollments e
-       JOIN students s        ON s.id  = e.student_id
-       LEFT JOIN classes c    ON c.id  = s.current_class_id
-       LEFT JOIN p_levels pl  ON pl.id = c.p_level_id
-       LEFT JOIN zones z      ON z.id  = e.zone_id
-       WHERE e.status = 'active'
-         AND e.expiry_date >= $1 AND e.expiry_date <= $2
-       ORDER BY e.expiry_date ASC`,
-      [todayStr, cutoffStr],
-    );
-    return rows.map(this.mapEnrollmentRow);
+    const rows = await this.rawEnrollments();
+    const out: any[] = [];
+    for (const r of rows) {
+      const payments = r.payments ?? {};
+      for (const [key, val] of Object.entries<any>(payments)) {
+        if (!val?.expires_on) continue;
+        if (val.expires_on >= todayStr && val.expires_on <= cutoffStr) {
+          out.push({
+            ...this.mapEnrollmentRow(r),
+            cell_key: key,
+            cell_label: this.cellLabel(r.type, key),
+            meal_type: r.type === 'feeding' ? (key.endsWith('B') ? 'breakfast' : 'lunch') : null,
+            expiry_date: val.expires_on,
+            paid_on: val.paid_on,
+          });
+        }
+      }
+    }
+    out.sort((a, b) => a.expiry_date.localeCompare(b.expiry_date));
+    return out;
   }
 
   // ─── Cron helper: fire expiry notifications ──────────────────────────────────
 
+  // Returns one item per payment cell whose expiry is exactly `days` from today.
   async getEnrollmentsExpiringInDays(days: number) {
     const target = new Date();
     target.setDate(target.getDate() + days);
     const targetStr = target.toISOString().split('T')[0];
 
-    return this.enrollmentRepo.find({
-      where: { expiry_date: targetStr, status: 'active' },
-      relations: ['student', 'student.current_class'],
-    });
+    const rows = await this.rawEnrollments();
+    const out: { studentName: string; type: string; label: string; expires_on: string }[] = [];
+    for (const r of rows) {
+      const payments = r.payments ?? {};
+      for (const [key, val] of Object.entries<any>(payments)) {
+        if (val?.expires_on === targetStr) {
+          out.push({
+            studentName: r.student_name,
+            type: r.type,
+            label: this.cellLabel(r.type, key),
+            expires_on: val.expires_on,
+          });
+        }
+      }
+    }
+    return out;
   }
 }
