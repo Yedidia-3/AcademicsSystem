@@ -47,14 +47,58 @@ export class AccountantService {
   // ─── Enrollments ─────────────────────────────────────────────────────────────
 
   async listEnrollments(type?: 'feeding' | 'transport') {
-    const where: any = { status: 'active' };
-    if (type) where.type = type;
-    return this.enrollmentRepo.find({
-      where,
-      relations: ['student', 'student.current_class', 'student.current_class.p_level', 'zone'],
-      order: { created_at: 'DESC' },
-    });
+    // Raw SQL — nested TypeORM relations (student.current_class.p_level) load
+    // unreliably on this schema and silently return null, which makes the
+    // enrollment screens appear empty. This always returns the full shape.
+    const params: any[] = [];
+    let typeClause = '';
+    if (type) { params.push(type); typeClause = `AND e.type = $${params.length}`; }
+
+    const rows = await this.enrollmentRepo.query(
+      `SELECT e.id, e.student_id, e.type, e.meal_type, e.zone_id,
+              e.payment_date::text  AS payment_date,
+              e.duration_days,
+              e.expiry_date::text   AS expiry_date,
+              e.status,
+              s.name AS student_name,
+              c.id   AS class_id,   c.name AS class_name,
+              pl.id  AS p_level_id, pl.name AS p_level_name,
+              z.id   AS zone_pk,    z.name AS zone_name, z.price AS zone_price
+       FROM enrollments e
+       JOIN students s        ON s.id  = e.student_id
+       LEFT JOIN classes c    ON c.id  = s.current_class_id
+       LEFT JOIN p_levels pl  ON pl.id = c.p_level_id
+       LEFT JOIN zones z      ON z.id  = e.zone_id
+       WHERE e.status = 'active' ${typeClause}
+       ORDER BY e.created_at DESC`,
+      params,
+    );
+    return rows.map(this.mapEnrollmentRow);
   }
+
+  private mapEnrollmentRow = (r: any) => ({
+    id: r.id,
+    student_id: r.student_id,
+    type: r.type,
+    meal_type: r.meal_type,
+    zone_id: r.zone_id,
+    payment_date: r.payment_date,
+    duration_days: r.duration_days,
+    expiry_date: r.expiry_date,
+    status: r.status,
+    student: {
+      id: r.student_id,
+      name: r.student_name,
+      current_class: r.class_id
+        ? {
+            id: r.class_id,
+            name: r.class_name,
+            p_level: r.p_level_id ? { id: r.p_level_id, name: r.p_level_name } : null,
+          }
+        : null,
+    },
+    zone: r.zone_pk ? { id: r.zone_pk, name: r.zone_name, price: Number(r.zone_price) } : null,
+  });
 
   async createEnrollment(dto: CreateEnrollmentDto) {
     const student = await this.studentRepo.findOne({ where: { id: dto.student_id } });
@@ -145,20 +189,30 @@ export class AccountantService {
     const today = new Date();
     const cutoff = new Date();
     cutoff.setDate(today.getDate() + daysAhead);
-
+    const todayStr = today.toISOString().split('T')[0];
     const cutoffStr = cutoff.toISOString().split('T')[0];
 
-    return this.enrollmentRepo
-      .createQueryBuilder('e')
-      .innerJoinAndSelect('e.student', 's')
-      .leftJoinAndSelect('s.current_class', 'c')
-      .leftJoinAndSelect('c.p_level', 'pl')
-      .leftJoinAndSelect('e.zone', 'z')
-      .where('e.status = :status', { status: 'active' })
-      .andWhere('e.expiry_date <= :cutoff', { cutoff: cutoffStr })
-      .andWhere('e.expiry_date >= :today', { today: today.toISOString().split('T')[0] })
-      .orderBy('e.expiry_date', 'ASC')
-      .getMany();
+    const rows = await this.enrollmentRepo.query(
+      `SELECT e.id, e.student_id, e.type, e.meal_type, e.zone_id,
+              e.payment_date::text  AS payment_date,
+              e.duration_days,
+              e.expiry_date::text   AS expiry_date,
+              e.status,
+              s.name AS student_name,
+              c.id   AS class_id,   c.name AS class_name,
+              pl.id  AS p_level_id, pl.name AS p_level_name,
+              z.id   AS zone_pk,    z.name AS zone_name, z.price AS zone_price
+       FROM enrollments e
+       JOIN students s        ON s.id  = e.student_id
+       LEFT JOIN classes c    ON c.id  = s.current_class_id
+       LEFT JOIN p_levels pl  ON pl.id = c.p_level_id
+       LEFT JOIN zones z      ON z.id  = e.zone_id
+       WHERE e.status = 'active'
+         AND e.expiry_date >= $1 AND e.expiry_date <= $2
+       ORDER BY e.expiry_date ASC`,
+      [todayStr, cutoffStr],
+    );
+    return rows.map(this.mapEnrollmentRow);
   }
 
   // ─── Cron helper: fire expiry notifications ──────────────────────────────────
