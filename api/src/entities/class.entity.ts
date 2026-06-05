@@ -22,6 +22,11 @@ export class Class {
   @Column({ type: 'enum', enum: ['active', 'inactive'], default: 'active' })
   status: 'active' | 'inactive';
 
+  // Set when the Dean distributes the class list. Until this is set, the class
+  // is not yet "live" — teachers and the accountant do not see it.
+  @Column({ type: 'timestamp', nullable: true })
+  distributed_at: Date;
+
   @CreateDateColumn()
   created_at: Date;
 

@@ -288,42 +288,67 @@ export class ShuffleService {
   }
 
   async distribute(sessionId: number, deanId: number, accountantId: number, teacherAssignments: { class_id: number; teacher_id: number }[]) {
-    const session = await this.sessionRepo.findOne({
-      where: { id: sessionId },
-      relations: ['results', 'results.proposed_class'],
-    });
+    const session = await this.sessionRepo.findOne({ where: { id: sessionId } });
     if (!session) throw new NotFoundException('Session not found');
     if (session.status !== 'approved') throw new BadRequestException('Session must be approved before distribution');
 
-    // Apply teacher assignments
+    // Load this session's results via raw SQL (reliable)
+    const results: { student_id: number; proposed_class_id: number }[] =
+      await this.resultRepo.query(
+        `SELECT student_id, proposed_class_id FROM shuffle_results WHERE shuffle_session_id = $1`,
+        [sessionId],
+      );
+
+    const now = new Date();
+
+    // 1) Promote every student to their proposed class
+    for (const r of results) {
+      await this.studentRepo.update(r.student_id, {
+        current_class_id: r.proposed_class_id,
+        status: 'promoted',
+      });
+    }
+
+    // 2) Mark EVERY proposed class in this session as distributed (live everywhere)
+    const distributedClassIds = [...new Set(results.map((r) => r.proposed_class_id))];
+    for (const cid of distributedClassIds) {
+      await this.classRepo.update(cid, { distributed_at: now });
+    }
+
+    // 3) Apply teacher assignments
     for (const ta of teacherAssignments) {
-      await this.classRepo.update(ta.class_id, { teacher_id: ta.teacher_id });
-    }
-
-    // Promote students to new classes
-    for (const result of session.results) {
-      await this.studentRepo.update(result.student_id, { current_class_id: result.proposed_class_id, status: 'promoted' });
-    }
-
-    session.status = 'distributed';
-    session.distributed_at = new Date();
-    await this.sessionRepo.save(session);
-
-    // Notify accountant
-    if (accountantId) {
-      await this.notificationsService.notify(accountantId, `A new class list has been distributed (Session #${sessionId}). Check your portal.`);
-    }
-
-    // Notify each assigned teacher
-    for (const ta of teacherAssignments) {
-      const cls = await this.classRepo.findOne({ where: { id: ta.class_id }, relations: ['p_level'] });
-      if (cls) {
-        const label = `${cls.p_level?.name ?? ''}${cls.name}`;
-        await this.notificationsService.notify(ta.teacher_id, `Your new class list for ${label} is ready.`);
+      if (ta.class_id && ta.teacher_id) {
+        await this.classRepo.update(ta.class_id, { teacher_id: ta.teacher_id });
       }
     }
 
-    return { message: 'Distributed successfully' };
+    // 4) Mark the session distributed
+    session.status = 'distributed';
+    session.distributed_at = now;
+    await this.sessionRepo.save(session);
+
+    // 5) Notify accountant
+    if (accountantId) {
+      await this.notificationsService.notify(
+        accountantId,
+        `A new class list has been distributed and is now available in your portal.`,
+        'success',
+      );
+    }
+
+    // 6) Notify each assigned teacher
+    for (const ta of teacherAssignments) {
+      if (!ta.teacher_id) continue;
+      const cls = await this.classRepo.findOne({ where: { id: ta.class_id }, relations: ['p_level'] });
+      const label = cls ? `${cls.p_level?.name ?? ''}${cls.name}` : 'your class';
+      await this.notificationsService.notify(
+        ta.teacher_id,
+        `Your new class list for ${label} is ready in your portal.`,
+        'success',
+      );
+    }
+
+    return { message: 'Distributed successfully', distributed_classes: distributedClassIds.length };
   }
 
   async getPendingApprovals() {

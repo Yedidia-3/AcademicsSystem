@@ -8,6 +8,7 @@ import { Card, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { api } from "../../../lib/api";
 import { toast } from "sonner";
+import { useAutoRefresh } from "../../../lib/useAutoRefresh";
 
 interface ShuffleSession {
   id: number;
@@ -52,6 +53,7 @@ export function DistributionList() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useAutoRefresh(load);
 
   // Counts for the summary cards
   const pendingCount     = sessions.filter(s => s.status === 'pending_approval').length;

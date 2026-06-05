@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Users, Utensils, Bus, AlertCircle, Loader2 } from "lucide-react";
 import { Card, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { useNavigate } from "react-router";
 import { api } from "../../../lib/api";
+import { useAutoRefresh } from "../../../lib/useAutoRefresh";
 
 interface Enrollment {
   id: number;
@@ -18,40 +19,50 @@ export function AccountantDashboard() {
   const [transportCount, setTransportCount] = useState<number | null>(null);
   const [expiringToday, setExpiringToday] = useState<number>(0);
   const [expiringIn3, setExpiringIn3] = useState<number>(0);
+  const [classCount, setClassCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [feeding, transport, expiring] = await Promise.all([
-          api.get<any>('/api/v1/accountant/enrollments?type=feeding').catch(() => []),
-          api.get<any>('/api/v1/accountant/enrollments?type=transport').catch(() => []),
-          api.get<any>('/api/v1/accountant/enrollments/expiring?days=3').catch(() => []),
-        ]);
-        const feedingList: Enrollment[] = Array.isArray(feeding) ? feeding : feeding.data ?? [];
-        const transportList: Enrollment[] = Array.isArray(transport) ? transport : transport.data ?? [];
-        const expiringList: Enrollment[] = Array.isArray(expiring) ? expiring : expiring.data ?? [];
+  const load = useCallback(async () => {
+    try {
+      // Resolve active year first (for distributed class lists)
+      const years = await api.get<any>('/api/v1/academics/academic-years').catch(() => []);
+      const yearList = Array.isArray(years) ? years : years.data ?? [];
+      const active = yearList.find((y: any) => y.status === 'active');
 
-        setFeedingCount(feedingList.length);
-        setTransportCount(transportList.length);
+      const [feeding, transport, expiring, classes] = await Promise.all([
+        api.get<any>('/api/v1/accountant/enrollments?type=feeding').catch(() => []),
+        api.get<any>('/api/v1/accountant/enrollments?type=transport').catch(() => []),
+        api.get<any>('/api/v1/accountant/enrollments/expiring?days=3').catch(() => []),
+        active
+          ? api.get<any>(`/api/v1/academics/all-classes?academic_year_id=${active.id}`).catch(() => [])
+          : Promise.resolve([]),
+      ]);
+      const feedingList: Enrollment[] = Array.isArray(feeding) ? feeding : feeding.data ?? [];
+      const transportList: Enrollment[] = Array.isArray(transport) ? transport : transport.data ?? [];
+      const expiringList: Enrollment[] = Array.isArray(expiring) ? expiring : expiring.data ?? [];
+      const classList = Array.isArray(classes) ? classes : classes.data ?? [];
 
-        const today = new Date().toISOString().split('T')[0];
-        setExpiringToday(expiringList.filter(e => e.expiry_date === today).length);
-        setExpiringIn3(expiringList.length);
-      } catch {
-        // silently fail, show zeros
-        setFeedingCount(0); setTransportCount(0);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+      setFeedingCount(feedingList.length);
+      setTransportCount(transportList.length);
+      setClassCount(classList.length);
+
+      const today = new Date().toISOString().split('T')[0];
+      setExpiringToday(expiringList.filter(e => e.expiry_date === today).length);
+      setExpiringIn3(expiringList.length);
+    } catch {
+      setFeedingCount(0); setTransportCount(0);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
+  useEffect(() => { load(); }, [load]);
+  useAutoRefresh(load);
+
   const stats = [
+    { label: "Class Lists Available", value: loading ? "—" : String(classCount), icon: Users, color: "#1A7F4B" },
     { label: "Feeding Enrollments", value: loading ? "—" : String(feedingCount ?? 0), icon: Utensils, color: "#001F5B" },
     { label: "Transport Enrollments", value: loading ? "—" : String(transportCount ?? 0), icon: Bus, color: "#800020" },
-    { label: "Expiring Today", value: loading ? "—" : String(expiringToday), icon: AlertCircle, color: "#C0392B" },
     { label: "Expiring in 3 Days", value: loading ? "—" : String(expiringIn3), icon: AlertCircle, color: "#D97706" },
   ];
 

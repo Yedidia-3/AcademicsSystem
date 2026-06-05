@@ -203,10 +203,24 @@ export class AcademicsService {
   // ─── Teacher portal ───────────────────────────────────────────────────────────
 
   async getTeacherClasses(teacherId: number) {
-    return this.classRepo.find({
-      where: { teacher_id: teacherId, status: 'active' },
-      relations: ['p_level', 'students'],
-    });
+    // Only classes that have been DISTRIBUTED are visible to the teacher.
+    const classes = await this.classRepo.query(
+      `SELECT c.id, c.name, c.p_level_id, pl.name AS p_level_name,
+              (SELECT COUNT(*) FROM students s WHERE s.current_class_id = c.id) AS student_count
+       FROM classes c
+       JOIN p_levels pl ON pl.id = c.p_level_id
+       WHERE c.teacher_id = $1
+         AND c.status = 'active'
+         AND c.distributed_at IS NOT NULL
+       ORDER BY pl.name ASC, c.name ASC`,
+      [teacherId],
+    );
+    return classes.map((c: any) => ({
+      id: c.id,
+      name: c.name,
+      p_level: { id: c.p_level_id, name: c.p_level_name },
+      student_count: Number(c.student_count ?? 0),
+    }));
   }
 
   async getClassStudents(classId: number) {
@@ -219,14 +233,45 @@ export class AcademicsService {
   // ─── Accountant portal ───────────────────────────────────────────────────────
 
   async getAllDistributedClasses(academicYearId: number) {
-    return this.classRepo
-      .createQueryBuilder('c')
-      .innerJoinAndSelect('c.p_level', 'pl')
-      .leftJoinAndSelect('c.students', 's')
-      .where('pl.academic_year_id = :yid', { yid: academicYearId })
-      .andWhere('c.status = :status', { status: 'active' })
-      .orderBy('pl.name', 'ASC')
-      .addOrderBy('c.name', 'ASC')
-      .getMany();
+    // Only DISTRIBUTED classes are visible to the accountant.
+    const classes = await this.classRepo.query(
+      `SELECT c.id, c.name, c.p_level_id, pl.name AS p_level_name
+       FROM classes c
+       JOIN p_levels pl ON pl.id = c.p_level_id
+       WHERE pl.academic_year_id = $1
+         AND c.status = 'active'
+         AND c.distributed_at IS NOT NULL
+       ORDER BY pl.name ASC, c.name ASC`,
+      [academicYearId],
+    );
+    if (!classes.length) return [];
+
+    const classIds = classes.map((c: any) => c.id);
+    const students = await this.studentRepo.query(
+      `SELECT id, name, rank, marks_percentage, former_class, current_class_id
+       FROM students
+       WHERE current_class_id = ANY($1)
+       ORDER BY rank ASC NULLS LAST, name ASC`,
+      [classIds],
+    );
+
+    const byClass = new Map<number, any[]>();
+    for (const s of students) {
+      if (!byClass.has(s.current_class_id)) byClass.set(s.current_class_id, []);
+      byClass.get(s.current_class_id)!.push({
+        id: s.id,
+        name: s.name,
+        rank: s.rank,
+        marks_percentage: s.marks_percentage,
+        former_class: s.former_class,
+      });
+    }
+
+    return classes.map((c: any) => ({
+      id: c.id,
+      name: c.name,
+      p_level: { id: c.p_level_id, name: c.p_level_name },
+      students: byClass.get(c.id) ?? [],
+    }));
   }
 }

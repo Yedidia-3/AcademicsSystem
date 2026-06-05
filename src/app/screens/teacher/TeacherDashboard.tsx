@@ -1,17 +1,18 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { BookOpen, Users, Loader2 } from "lucide-react";
 import { Card, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { useNavigate } from "react-router";
 import { api } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth";
-import { toast } from "sonner";
+import { useAutoRefresh } from "../../../lib/useAutoRefresh";
 
 interface ClassData {
   id: number;
   name: string;
   p_level: { id: number; name: string; };
-  students: any[];
+  student_count?: number;
+  students?: any[];
 }
 
 export function TeacherDashboard() {
@@ -20,19 +21,19 @@ export function TeacherDashboard() {
   const [classes, setClasses] = useState<ClassData[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await api.get<any>('/api/v1/academics/teacher/classes');
-        setClasses(Array.isArray(res) ? res : res.data ?? []);
-      } catch {
-        toast.error('Failed to load classes');
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+  const load = useCallback(async () => {
+    try {
+      const res = await api.get<any>('/api/v1/academics/teacher/classes');
+      setClasses(Array.isArray(res) ? res : res.data ?? []);
+    } catch {
+      // silent — empty state is shown
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => { load(); }, [load]);
+  useAutoRefresh(load);
 
   return (
     <div className="space-y-6">
@@ -101,7 +102,7 @@ export function TeacherDashboard() {
                     <Users size={16} style={{ color: "#800020" }} />
                   </div>
                   <p className="text-sm" style={{ color: "#9A9A9A" }}>
-                    {cls.students?.length ?? 0} students
+                    {cls.student_count ?? cls.students?.length ?? 0} students
                   </p>
                 </div>
 

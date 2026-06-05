@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { AlertCircle, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { Card, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { useNavigate } from "react-router";
 import { api } from "../../../lib/api";
-import { toast } from "sonner";
+import { useAutoRefresh } from "../../../lib/useAutoRefresh";
 
 interface ShuffleSession {
   id: number;
@@ -18,19 +18,20 @@ export function PrincipalDashboard() {
   const [sessions, setSessions] = useState<ShuffleSession[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await api.get<any>('/api/v1/academics/shuffle/pending');
-        setSessions(Array.isArray(res) ? res : res.data ?? []);
-      } catch {
-        toast.error('Failed to load approvals');
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+  const load = useCallback(async () => {
+    try {
+      // Full session list so approved/rejected counts are accurate
+      const res = await api.get<any>('/api/v1/academics/shuffle/sessions');
+      setSessions(Array.isArray(res) ? res : res.data ?? []);
+    } catch {
+      // silent — empty state is shown
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => { load(); }, [load]);
+  useAutoRefresh(load);
 
   const pendingCount = sessions.filter(s => s.status === 'pending_approval').length;
   const approvedCount = sessions.filter(s => s.status === 'approved' || s.status === 'distributed').length;

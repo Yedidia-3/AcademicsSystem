@@ -4,10 +4,11 @@ import { Card, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { useNavigate } from "react-router";
 import { api } from "../../../lib/api";
+import { useAutoRefresh } from "../../../lib/useAutoRefresh";
 
 interface AcademicYear { id: number; name: string; status: string; }
 interface PLevel { id: number; name: string; status: string; classes: { id: number; students: any[] }[]; }
-interface ShuffleSession { id: number; status: string; p_level: { id: number; name: string }; }
+interface ShuffleSession { id: number; status: string; p_level: { id: number; name: string }; student_count?: number; }
 
 const statusColor: Record<string, string> = {
   distributed: "#1A7F4B",
@@ -43,7 +44,8 @@ export function DeanDashboard() {
       if (active) {
         const [pl, sess] = await Promise.all([
           api.get<any>(`/api/v1/academics/p-levels?academic_year_id=${active.id}`),
-          api.get<any>('/api/v1/academics/shuffle/pending').catch(() => []),
+          // Dean-accessible: every shuffle session with its live status
+          api.get<any>('/api/v1/academics/shuffle/sessions').catch(() => []),
         ]);
         setPLevels(Array.isArray(pl) ? pl : pl.data ?? []);
         setSessions(Array.isArray(sess) ? sess : sess.data ?? []);
@@ -56,18 +58,17 @@ export function DeanDashboard() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useAutoRefresh(load);
 
   const totalStudents = pLevels.reduce((sum, pl) => sum + (pl.classes?.reduce((s, c) => s + (c.students?.length ?? 0), 0) ?? 0), 0);
-  const pendingCount = sessions.length;
-  const distributedCount = pLevels.filter(pl => {
-    // A p-level is "distributed" if it has classes with students
-    return (pl.classes?.length ?? 0) > 0;
-  }).length;
+  const pendingCount     = sessions.filter(s => s.status === 'pending_approval').length;
+  const approvedCount    = sessions.filter(s => s.status === 'approved').length;
+  const distributedCount = sessions.filter(s => s.status === 'distributed').length;
 
   const stats = [
     { label: "Total P-Levels", value: loading ? "—" : String(pLevels.length), icon: GraduationCap, color: "#001F5B" },
     { label: "Pending Approval", value: loading ? "—" : String(pendingCount), icon: CheckCircle, color: "#D97706" },
-    { label: "Distributed", value: loading ? "—" : String(distributedCount), icon: Share2, color: "#1A7F4B" },
+    { label: "Ready / Distributed", value: loading ? "—" : String(approvedCount + distributedCount), icon: Share2, color: "#1A7F4B" },
     { label: "Total Students", value: loading ? "—" : String(totalStudents), icon: Users, color: "#800020" },
   ];
 
