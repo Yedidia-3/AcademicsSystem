@@ -3,6 +3,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { AccountantService } from './accountant.service';
+import { BulkEnrollDto } from './enrollments/dto/bulk-enroll.dto';
 import { CreateEnrollmentDto } from './enrollments/dto/create-enrollment.dto';
 import { CreateZoneDto } from './zones/dto/create-zone.dto';
 
@@ -35,6 +36,17 @@ export class AccountantController {
 
   @Post('enrollments')
   createEnrollment(@Body() dto: CreateEnrollmentDto) { return this.accountantService.createEnrollment(dto); }
+
+  @Post('enrollments/bulk')
+  bulkEnroll(@Body() dto: BulkEnrollDto) { return this.accountantService.bulkEnroll(dto); }
+
+  @Delete('enrollments/by-student/:studentId')
+  waiveByStudent(
+    @Param('studentId') studentId: string,
+    @Query('type') type: 'feeding' | 'transport',
+  ) {
+    return this.accountantService.waiveByStudent(+studentId, type);
+  }
 
   @Put('enrollments/:id')
   updateEnrollment(@Param('id') id: string, @Body() dto: Partial<CreateEnrollmentDto>) {

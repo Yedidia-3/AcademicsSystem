@@ -4,6 +4,7 @@ import { LessThanOrEqual, Repository } from 'typeorm';
 import { Enrollment } from '../entities/enrollment.entity';
 import { Zone } from '../entities/zone.entity';
 import { Student } from '../entities/student.entity';
+import { BulkEnrollDto } from './enrollments/dto/bulk-enroll.dto';
 import { CreateEnrollmentDto } from './enrollments/dto/create-enrollment.dto';
 import { CreateZoneDto } from './zones/dto/create-zone.dto';
 
@@ -84,6 +85,52 @@ export class AccountantService {
 
     Object.assign(enrollment, dto);
     return this.enrollmentRepo.save(enrollment);
+  }
+
+  // Bulk-enroll a whole distributed class/p-level into feeding or transport.
+  // Students who already have an active enrollment of that type are skipped.
+  async bulkEnroll(dto: BulkEnrollDto) {
+    const paymentDate = new Date(dto.payment_date);
+    const expiry = new Date(paymentDate);
+    expiry.setDate(expiry.getDate() + dto.duration_days);
+    const expiryStr = expiry.toISOString().split('T')[0];
+
+    let created = 0;
+    let skipped = 0;
+
+    for (const sid of dto.student_ids) {
+      const existing = await this.enrollmentRepo.findOne({
+        where: { student_id: sid, type: dto.type, status: 'active' },
+      });
+      if (existing) { skipped++; continue; }
+
+      const enrollment = this.enrollmentRepo.create({
+        student_id: sid,
+        type: dto.type,
+        meal_type: dto.type === 'feeding' ? (dto.meal_type ?? 'both') : null,
+        zone_id: dto.type === 'transport' ? (dto.zone_id ?? null) : null,
+        payment_date: dto.payment_date,
+        duration_days: dto.duration_days,
+        expiry_date: expiryStr,
+      });
+      await this.enrollmentRepo.save(enrollment);
+      created++;
+    }
+
+    return { created, skipped, total: dto.student_ids.length };
+  }
+
+  // Waive (archive) a student's active enrollment of a given type — used by the
+  // slide-to-reveal trash action in the Class List module.
+  async waiveByStudent(studentId: number, type: 'feeding' | 'transport') {
+    const active = await this.enrollmentRepo.find({
+      where: { student_id: studentId, type, status: 'active' },
+    });
+    for (const e of active) {
+      e.status = 'archived';
+      await this.enrollmentRepo.save(e);
+    }
+    return { waived: active.length };
   }
 
   async archiveEnrollment(id: number) {
