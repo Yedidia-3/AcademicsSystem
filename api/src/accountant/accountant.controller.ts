@@ -53,6 +53,16 @@ export class AccountantController {
     return this.accountantService.updateEnrollment(+id, dto);
   }
 
+  @Put('enrollments/:id/payments')
+  updatePayments(@Param('id') id: string, @Body('payments') payments: Record<string, boolean>) {
+    return this.accountantService.updatePayments(+id, payments);
+  }
+
+  @Put('enrollments/:id/zone')
+  setZone(@Param('id') id: string, @Body('zone_id') zoneId: number | null) {
+    return this.accountantService.setZone(+id, zoneId ?? null);
+  }
+
   @Delete('enrollments/:id')
   archiveEnrollment(@Param('id') id: string) { return this.accountantService.archiveEnrollment(+id); }
 

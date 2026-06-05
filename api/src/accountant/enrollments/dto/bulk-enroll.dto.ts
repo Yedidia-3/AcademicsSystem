@@ -1,5 +1,7 @@
-import { ArrayNotEmpty, IsArray, IsDateString, IsEnum, IsNumber, IsOptional } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsEnum, IsNumber, IsOptional } from 'class-validator';
 
+// Importing a class into a service is a membership action — no payment yet.
+// The accountant ticks the monthly B/L boxes afterwards in the grid.
 export class BulkEnrollDto {
   @IsArray()
   @ArrayNotEmpty()
@@ -10,16 +12,6 @@ export class BulkEnrollDto {
   type: 'feeding' | 'transport';
 
   @IsOptional()
-  @IsEnum(['breakfast', 'lunch', 'both'])
-  meal_type?: 'breakfast' | 'lunch' | 'both';
-
-  @IsOptional()
   @IsNumber()
   zone_id?: number;
-
-  @IsDateString()
-  payment_date: string;
-
-  @IsNumber()
-  duration_days: number;
 }

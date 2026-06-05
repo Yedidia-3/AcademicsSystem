@@ -137,24 +137,20 @@ export function StudentListPerClass() {
   };
 
   const handleBulkEnroll = async () => {
-    if (notEnrolledIds.length === 0) { toast.info('All visible students are already enrolled'); return; }
-    if (enrollType === 'transport' && !zoneId) { toast.error('Please select a zone'); return; }
+    if (notEnrolledIds.length === 0) { toast.info('All visible students are already imported'); return; }
     setSaving(true);
     try {
       const res = await api.post<any>('/api/v1/accountant/enrollments/bulk', {
         student_ids: notEnrolledIds,
         type: enrollType,
-        meal_type: enrollType === 'feeding' ? mealType : undefined,
-        zone_id: enrollType === 'transport' ? +zoneId : undefined,
-        payment_date: paymentDate,
-        duration_days: +durationDays,
+        zone_id: enrollType === 'transport' && zoneId ? +zoneId : undefined,
       });
       const created = res?.created ?? notEnrolledIds.length;
-      toast.success(`${created} student${created !== 1 ? 's' : ''} enrolled into ${enrollType}`);
+      toast.success(`${created} student${created !== 1 ? 's' : ''} imported into ${enrollType}. Set payments in the ${enrollType} screen.`);
       setShowEnroll(false);
       await loadEnrollments();
     } catch (err: any) {
-      toast.error(err.message ?? 'Failed to enroll');
+      toast.error(err.message ?? 'Failed to import');
     } finally {
       setSaving(false);
     }
@@ -201,7 +197,7 @@ export function StudentListPerClass() {
         <Button onClick={openEnroll} className="h-11"
           style={{ backgroundColor: "#800020", color: "#FFFFFF" }}>
           <Plus size={18} className="mr-2" />
-          Enroll Into {enrollType === 'feeding' ? 'Feeding' : 'Transport'}
+          Import to {enrollType === 'feeding' ? 'Feeding' : 'Transport'}
         </Button>
       </div>
 
@@ -339,7 +335,7 @@ export function StudentListPerClass() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              Enroll into {enrollType === 'feeding' ? 'Feeding' : 'Transport'}
+              Import to {enrollType === 'feeding' ? 'Feeding' : 'Transport'}
             </DialogTitle>
             <DialogDescription>
               {notEnrolledIds.length} student{notEnrolledIds.length !== 1 ? 's' : ''} in the current view
@@ -349,24 +345,12 @@ export function StudentListPerClass() {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            {enrollType === 'feeding' ? (
+            {enrollType === 'transport' && (
               <div>
-                <Label>Meal Type</Label>
-                <Select value={mealType} onValueChange={setMealType}>
-                  <SelectTrigger className="w-full h-11 mt-2"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="breakfast">Breakfast only</SelectItem>
-                    <SelectItem value="lunch">Lunch only</SelectItem>
-                    <SelectItem value="both">Breakfast & Lunch</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : (
-              <div>
-                <Label>Transport Zone</Label>
+                <Label>Default Transport Zone <span style={{ color: "#9A9A9A" }}>(optional — can change per student later)</span></Label>
                 <Select value={zoneId} onValueChange={setZoneId}>
                   <SelectTrigger className="w-full h-11 mt-2">
-                    <SelectValue placeholder="Select zone" />
+                    <SelectValue placeholder="No zone yet" />
                   </SelectTrigger>
                   <SelectContent>
                     {zones.map(z => (
@@ -376,39 +360,23 @@ export function StudentListPerClass() {
                     ))}
                   </SelectContent>
                 </Select>
-                {zones.length === 0 && (
-                  <p className="text-sm mt-1" style={{ color: "#D97706" }}>
-                    No zones yet — create zones first.
-                  </p>
-                )}
               </div>
             )}
-
-            <div>
-              <Label>Payment Date</Label>
-              <Input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)}
-                className="mt-2 h-11" />
-            </div>
-            <div>
-              <Label>Duration</Label>
-              <Select value={durationDays} onValueChange={setDurationDays}>
-                <SelectTrigger className="w-full h-11 mt-2"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {DURATION_OPTIONS.map(o => (
-                    <SelectItem key={o.days} value={String(o.days)}>{o.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="p-3 rounded-lg" style={{ backgroundColor: "#F4F4F6" }}>
+              <p className="text-sm" style={{ color: "#2C2C2C" }}>
+                These students will be added to <strong>{enrollType === 'feeding' ? 'School Feeding' : 'Transport'}</strong>.
+                Tick the monthly payment boxes afterwards in the {enrollType === 'feeding' ? 'Feeding' : 'Transport'} screen.
+              </p>
             </div>
           </div>
 
           <DialogFooter>
             <Button variant="ghost" onClick={() => setShowEnroll(false)}>Cancel</Button>
             <Button onClick={handleBulkEnroll}
-              disabled={saving || notEnrolledIds.length === 0 || (enrollType === 'transport' && !zoneId)}
+              disabled={saving || notEnrolledIds.length === 0}
               style={{ backgroundColor: "#800020", color: "#FFFFFF" }}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Enroll {notEnrolledIds.length} Student{notEnrolledIds.length !== 1 ? 's' : ''}
+              Import {notEnrolledIds.length} Student{notEnrolledIds.length !== 1 ? 's' : ''}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -19,15 +19,22 @@ export class Enrollment {
   @Column({ nullable: true })
   zone_id: number;
 
-  @Column({ type: 'date' })
+  // Legacy single-payment fields (nullable — membership model uses `payments`)
+  @Column({ type: 'date', nullable: true })
   payment_date: string;
 
-  @Column({ type: 'int' })
+  @Column({ type: 'int', nullable: true })
   duration_days: number;
 
   @Index()
-  @Column({ type: 'date' })
+  @Column({ type: 'date', nullable: true })
   expiry_date: string;
+
+  // Monthly payment grid.
+  //  Feeding  → keys "1B","1L","2B","2L",… (month + Breakfast/Lunch)
+  //  Transport→ keys "1","2","3","4"        (month)
+  @Column({ type: 'jsonb', default: () => "'{}'" })
+  payments: Record<string, boolean>;
 
   @Column({ type: 'enum', enum: ['active', 'archived'], default: 'active' })
   status: 'active' | 'archived';

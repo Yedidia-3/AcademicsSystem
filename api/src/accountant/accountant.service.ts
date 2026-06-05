@@ -55,7 +55,7 @@ export class AccountantService {
     if (type) { params.push(type); typeClause = `AND e.type = $${params.length}`; }
 
     const rows = await this.enrollmentRepo.query(
-      `SELECT e.id, e.student_id, e.type, e.meal_type, e.zone_id,
+      `SELECT e.id, e.student_id, e.type, e.meal_type, e.zone_id, e.payments,
               e.payment_date::text  AS payment_date,
               e.duration_days,
               e.expiry_date::text   AS expiry_date,
@@ -82,6 +82,7 @@ export class AccountantService {
     type: r.type,
     meal_type: r.meal_type,
     zone_id: r.zone_id,
+    payments: r.payments ?? {},
     payment_date: r.payment_date,
     duration_days: r.duration_days,
     expiry_date: r.expiry_date,
@@ -131,14 +132,10 @@ export class AccountantService {
     return this.enrollmentRepo.save(enrollment);
   }
 
-  // Bulk-enroll a whole distributed class/p-level into feeding or transport.
-  // Students who already have an active enrollment of that type are skipped.
+  // Import a whole distributed class/p-level into feeding or transport as a
+  // MEMBERSHIP (no payment yet). The accountant then ticks the monthly B/L
+  // boxes in the Feeding/Transport grid. Already-enrolled students are skipped.
   async bulkEnroll(dto: BulkEnrollDto) {
-    const paymentDate = new Date(dto.payment_date);
-    const expiry = new Date(paymentDate);
-    expiry.setDate(expiry.getDate() + dto.duration_days);
-    const expiryStr = expiry.toISOString().split('T')[0];
-
     let created = 0;
     let skipped = 0;
 
@@ -151,17 +148,36 @@ export class AccountantService {
       const enrollment = this.enrollmentRepo.create({
         student_id: sid,
         type: dto.type,
-        meal_type: dto.type === 'feeding' ? (dto.meal_type ?? 'both') : null,
+        meal_type: null,
         zone_id: dto.type === 'transport' ? (dto.zone_id ?? null) : null,
-        payment_date: dto.payment_date,
-        duration_days: dto.duration_days,
-        expiry_date: expiryStr,
+        payments: {},
       });
       await this.enrollmentRepo.save(enrollment);
       created++;
     }
 
     return { created, skipped, total: dto.student_ids.length };
+  }
+
+  // Replace the monthly payment grid for one enrollment.
+  async updatePayments(id: number, payments: Record<string, boolean>) {
+    const e = await this.enrollmentRepo.findOne({ where: { id } });
+    if (!e) throw new NotFoundException('Enrollment not found');
+    // keep only truthy keys to stay tidy
+    const clean: Record<string, boolean> = {};
+    for (const [k, v] of Object.entries(payments ?? {})) if (v) clean[k] = true;
+    e.payments = clean;
+    await this.enrollmentRepo.save(e);
+    return { id, payments: clean };
+  }
+
+  // Set the transport zone for one enrollment.
+  async setZone(id: number, zoneId: number | null) {
+    const e = await this.enrollmentRepo.findOne({ where: { id } });
+    if (!e) throw new NotFoundException('Enrollment not found');
+    e.zone_id = zoneId;
+    await this.enrollmentRepo.save(e);
+    return { id, zone_id: zoneId };
   }
 
   // Waive (archive) a student's active enrollment of a given type — used by the
@@ -193,7 +209,7 @@ export class AccountantService {
     const cutoffStr = cutoff.toISOString().split('T')[0];
 
     const rows = await this.enrollmentRepo.query(
-      `SELECT e.id, e.student_id, e.type, e.meal_type, e.zone_id,
+      `SELECT e.id, e.student_id, e.type, e.meal_type, e.zone_id, e.payments,
               e.payment_date::text  AS payment_date,
               e.duration_days,
               e.expiry_date::text   AS expiry_date,

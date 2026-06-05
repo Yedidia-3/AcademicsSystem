@@ -1,181 +1,133 @@
-﻿import { useState, useEffect, useCallback } from "react";
-import { Search, Plus, Download, Loader2, MoreVertical, Bus } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Search, Download, Loader2, MoreVertical, Bus, Plus } from "lucide-react";
+import { useNavigate } from "react-router";
 import { Card, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
-import { Label } from "../../components/ui/label";
+import { Checkbox } from "../../components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../../components/ui/dropdown-menu";
 import { api } from "../../../lib/api";
 import { toast } from "sonner";
+import { useAutoRefresh } from "../../../lib/useAutoRefresh";
 
-interface Zone {
-  id: number;
-  name: string;
-  price: number;
-  status: string;
-}
+interface Zone { id: number; name: string; price: number; }
 
 interface Enrollment {
   id: number;
   student_id: number;
-  type: string;
   zone_id: number | null;
-  payment_date: string;
-  duration_days: number;
-  expiry_date: string;
-  status: string;
+  payments: Record<string, boolean>;
   student: {
     id: number;
     name: string;
-    current_class: {
-      id: number;
-      name: string;
-      p_level: { id: number; name: string; };
-    } | null;
+    current_class: { id: number; name: string; p_level: { id: number; name: string } | null } | null;
   } | null;
-  zone: Zone | null;
 }
 
-interface StudentOption {
-  id: number;
-  name: string;
-  className: string;
-}
+const MONTHS = [1, 2, 3, 4];
+const MONTH_LABEL = ["1st", "2nd", "3rd", "4th"];
 
-const DURATION_OPTIONS = [
-  { label: '1 month (30 days)', days: 30 },
-  { label: '2 months (60 days)', days: 60 },
-  { label: '3 months (90 days)', days: 90 },
-  { label: '4 months (120 days)', days: 120 },
-];
+function classLabel(e: Enrollment): string {
+  const cc = e.student?.current_class;
+  if (!cc) return "—";
+  return `${cc.p_level?.name ?? ""}${cc.name}`;
+}
+function pLevelName(e: Enrollment): string {
+  return e.student?.current_class?.p_level?.name ?? "";
+}
 
 export function TransportEnrollment() {
+  const navigate = useNavigate();
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [zones, setZones] = useState<Zone[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [zoneFilter, setZoneFilter] = useState<string>("all");
-
-  // Add dialog
-  const [showAddDialog, setShowAddDialog] = useState(false);
-  const [allStudents, setAllStudents] = useState<StudentOption[]>([]);
-  const [studentsLoading, setStudentsLoading] = useState(false);
-  const [studentSearch, setStudentSearch] = useState("");
-  const [selectedStudentId, setSelectedStudentId] = useState<string>("");
-  const [selectedZoneId, setSelectedZoneId] = useState<string>("");
-  const [paymentDate, setPaymentDate] = useState("");
-  const [durationDays, setDurationDays] = useState<string>("30");
-  const [saving, setSaving] = useState(false);
-
-  // Archive confirmation
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [selectedEnrollment, setSelectedEnrollment] = useState<Enrollment | null>(null);
+  const [pLevelFilter, setPLevelFilter] = useState<string>("all");
+  const [classFilter, setClassFilter] = useState<string>("all");
+  const [savingId, setSavingId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     try {
       const [enrollRes, zoneRes] = await Promise.all([
         api.get<any>('/api/v1/accountant/enrollments?type=transport'),
-        api.get<any>('/api/v1/accountant/zones'),
+        api.get<any>('/api/v1/accountant/zones').catch(() => []),
       ]);
       setEnrollments(Array.isArray(enrollRes) ? enrollRes : enrollRes.data ?? []);
       setZones(Array.isArray(zoneRes) ? zoneRes : zoneRes.data ?? []);
     } catch {
-      toast.error('Failed to load transport enrollments');
+      // silent
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useAutoRefresh(load);
 
-  const loadAllStudents = async () => {
-    setStudentsLoading(true);
+  const pLevels = Array.from(new Set(enrollments.map(pLevelName).filter(Boolean))).sort();
+  const classesForFilter = Array.from(
+    new Set(
+      enrollments
+        .filter(e => pLevelFilter === "all" || pLevelName(e) === pLevelFilter)
+        .map(classLabel)
+        .filter(c => c !== "—")
+    )
+  ).sort();
+
+  const filtered = enrollments.filter(e => {
+    const matchSearch = (e.student?.name ?? "").toLowerCase().includes(searchTerm.toLowerCase());
+    const matchPLevel = pLevelFilter === "all" || pLevelName(e) === pLevelFilter;
+    const matchClass = classFilter === "all" || classLabel(e) === classFilter;
+    return matchSearch && matchPLevel && matchClass;
+  });
+
+  const togglePayment = async (e: Enrollment, month: number) => {
+    if (!e.zone_id) { toast.error('Assign a zone before recording payment'); return; }
+    const key = `${month}`;
+    const next = { ...(e.payments ?? {}) };
+    if (next[key]) delete next[key]; else next[key] = true;
+    setEnrollments(prev => prev.map(x => x.id === e.id ? { ...x, payments: next } : x));
+    setSavingId(e.id);
     try {
-      const years = await api.get<any>('/api/v1/academics/academic-years');
-      const yearsList = Array.isArray(years) ? years : (years as any).data ?? [];
-      const activeYear = yearsList.find((y: any) => y.status === 'active');
-      if (!activeYear) { toast.error('No active academic year'); setStudentsLoading(false); return; }
-
-      const res = await api.get<any>(`/api/v1/academics/all-classes?academic_year_id=${activeYear.id}`);
-      const classes = Array.isArray(res) ? res : res.data ?? [];
-      const opts: StudentOption[] = [];
-      for (const cls of classes) {
-        const className = `${cls.p_level?.name ?? ''}${cls.name}`;
-        for (const s of (cls.students ?? [])) {
-          opts.push({ id: s.id, name: s.name, className });
-        }
-      }
-      opts.sort((a, b) => a.name.localeCompare(b.name));
-      setAllStudents(opts);
-    } catch {
-      toast.error('Failed to load students');
-    } finally {
-      setStudentsLoading(false);
-    }
-  };
-
-  const openAddDialog = () => {
-    setShowAddDialog(true);
-    setSelectedStudentId("");
-    setSelectedZoneId(zones.length > 0 ? String(zones[0].id) : "");
-    setPaymentDate(new Date().toISOString().split('T')[0]);
-    setDurationDays("30");
-    setStudentSearch("");
-    if (allStudents.length === 0) loadAllStudents();
-  };
-
-  const handleAdd = async () => {
-    if (!selectedStudentId || !selectedZoneId || !paymentDate) {
-      toast.error('Please fill all required fields');
-      return;
-    }
-    setSaving(true);
-    try {
-      await api.post('/api/v1/accountant/enrollments', {
-        student_id: +selectedStudentId,
-        type: 'transport',
-        zone_id: +selectedZoneId,
-        payment_date: paymentDate,
-        duration_days: +durationDays,
-      });
-      const student = allStudents.find(s => String(s.id) === selectedStudentId);
-      toast.success(`${student?.name ?? 'Student'} enrolled in transport`);
-      setShowAddDialog(false);
-      await load();
+      await api.put(`/api/v1/accountant/enrollments/${e.id}/payments`, { payments: next });
     } catch (err: any) {
-      toast.error(err.message ?? 'Failed to create enrollment');
+      toast.error(err.message ?? 'Failed to update payment');
+      load();
     } finally {
-      setSaving(false);
+      setSavingId(null);
     }
   };
 
-  const handleDelete = async () => {
-    if (!selectedEnrollment) return;
-    setSaving(true);
+  const setZone = async (e: Enrollment, zoneId: string) => {
+    setEnrollments(prev => prev.map(x => x.id === e.id ? { ...x, zone_id: +zoneId } : x));
     try {
-      await api.delete(`/api/v1/accountant/enrollments/${selectedEnrollment.id}`);
-      toast.success('Enrollment archived');
-      setShowDeleteDialog(false);
-      setSelectedEnrollment(null);
-      await load();
+      await api.put(`/api/v1/accountant/enrollments/${e.id}/zone`, { zone_id: +zoneId });
+      toast.success('Zone updated');
     } catch (err: any) {
-      toast.error(err.message ?? 'Failed to archive enrollment');
-    } finally {
-      setSaving(false);
+      toast.error(err.message ?? 'Failed to set zone');
+      load();
     }
   };
+
+  const handleWaive = async (e: Enrollment) => {
+    try {
+      await api.delete(`/api/v1/accountant/enrollments/${e.id}`);
+      toast.success(`${e.student?.name ?? 'Student'} removed from transport`);
+      load();
+    } catch (err: any) {
+      toast.error(err.message ?? 'Failed to remove');
+    }
+  };
+
+  const zoneName = (id: number | null) => zones.find(z => z.id === id)?.name ?? null;
 
   const handleExport = () => {
-    const header = "Name,Class,Zone,Price (RWF),Payment Date,Expiry Date\n";
-    const rows = filteredEnrollments.map(e => {
-      const name = e.student?.name ?? '';
-      const cls = e.student?.current_class
-        ? `${e.student.current_class.p_level?.name ?? ''}${e.student.current_class.name}`
-        : '';
-      return `"${name}","${cls}","${e.zone?.name ?? ''}","${e.zone?.price?.toLocaleString() ?? ''}","${e.payment_date}","${e.expiry_date}"`;
+    const header = "Name,Class,Zone," + MONTHS.map(m => `M${m}`).join(",") + "\n";
+    const rows = filtered.map(e => {
+      const cells = MONTHS.map(m => e.payments?.[`${m}`] ? "Paid" : "");
+      return `"${e.student?.name ?? ''}","${classLabel(e)}","${zoneName(e.zone_id) ?? ''}",${cells.map(c => `"${c}"`).join(",")}`;
     }).join("\n");
     const blob = new Blob([header + rows], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -184,72 +136,48 @@ export function TransportEnrollment() {
     URL.revokeObjectURL(url);
   };
 
-  const isExpiringSoon = (expiry: string) => {
-    const today = new Date();
-    const exp = new Date(expiry);
-    const diff = (exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24);
-    return diff <= 3 && diff >= 0;
-  };
-  const isExpired = (expiry: string) => new Date(expiry) < new Date();
-  const expiryBadge = (expiry: string) => {
-    if (isExpired(expiry)) return { label: 'Expired', color: '#C0392B' };
-    if (isExpiringSoon(expiry)) return { label: 'Expiring Soon', color: '#D97706' };
-    return { label: 'Active', color: '#1A7F4B' };
-  };
-
-  const filteredEnrollments = enrollments.filter(e => {
-    const matchSearch = e.student?.name?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchZone = zoneFilter === "all" || String(e.zone_id) === zoneFilter;
-    return matchSearch && matchZone;
-  });
-
-  const filteredStudents = allStudents.filter(s =>
-    s.name.toLowerCase().includes(studentSearch.toLowerCase()) ||
-    s.className.toLowerCase().includes(studentSearch.toLowerCase())
-  ).slice(0, 50);
-
-  const expiryDate = paymentDate && durationDays
-    ? new Date(new Date(paymentDate).getTime() + +durationDays * 86400000).toLocaleDateString()
-    : null;
-
-  const selectedZone = zones.find(z => String(z.id) === selectedZoneId);
-
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-semibold" style={{ color: "#2C2C2C" }}>Transport</h1>
-          <p className="text-sm mt-1" style={{ color: "#9A9A9A" }}>Manage transport zone enrollments</p>
+          <p className="text-sm mt-1" style={{ color: "#9A9A9A" }}>
+            Assign a zone and tick monthly payments for each enrolled student
+          </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" className="h-11" onClick={handleExport}
             style={{ color: "#800020", borderColor: "#800020" }}>
-            <Download size={18} className="mr-2" /> Export
+            <Download size={18} className="mr-2" /> Download
           </Button>
-          <Button className="h-11" onClick={openAddDialog}
+          <Button className="h-11" onClick={() => navigate('/accountant/class-lists')}
             style={{ backgroundColor: "#800020", color: "#FFFFFF" }}>
-            <Plus size={18} className="mr-2" /> Add Enrollment
+            <Plus size={18} className="mr-2" /> Add Students (from Class Lists)
           </Button>
         </div>
       </div>
 
       <Card style={{ borderColor: "#E5E5E7" }}>
         <CardContent className="p-6">
-          <div className="flex flex-col md:flex-row gap-4 mb-6">
+          {/* Filters */}
+          <div className="flex flex-col md:flex-row gap-3 mb-6">
             <div className="flex-1 relative">
               <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "#9A9A9A" }} />
               <Input placeholder="Search student name..." value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 h-11" />
+                onChange={e => setSearchTerm(e.target.value)} className="pl-10 h-11" />
             </div>
-            <Select value={zoneFilter} onValueChange={setZoneFilter}>
-              <SelectTrigger className="w-full md:w-48 h-11">
-                <SelectValue placeholder="Filter by zone" />
-              </SelectTrigger>
+            <Select value={pLevelFilter} onValueChange={(v) => { setPLevelFilter(v); setClassFilter("all"); }}>
+              <SelectTrigger className="w-full md:w-44 h-11"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Zones</SelectItem>
-                {zones.map(z => (
-                  <SelectItem key={z.id} value={String(z.id)}>{z.name}</SelectItem>
-                ))}
+                <SelectItem value="all">All P-Levels</SelectItem>
+                {pLevels.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={classFilter} onValueChange={setClassFilter}>
+              <SelectTrigger className="w-full md:w-44 h-11"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Classes</SelectItem>
+                {classesForFilter.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -258,217 +186,94 @@ export function TransportEnrollment() {
             <div className="flex justify-center py-12">
               <Loader2 className="animate-spin" size={28} style={{ color: "#001F5B" }} />
             </div>
-          ) : filteredEnrollments.length === 0 ? (
+          ) : filtered.length === 0 ? (
             <div className="text-center py-12">
               <Bus size={48} className="mx-auto mb-3" style={{ color: "#9A9A9A" }} />
-              <p className="text-lg font-semibold" style={{ color: "#2C2C2C" }}>No transport enrollments</p>
+              <p className="text-lg font-semibold" style={{ color: "#2C2C2C" }}>No students in transport</p>
               <p className="text-sm mt-2 mb-4" style={{ color: "#9A9A9A" }}>
-                {searchTerm || zoneFilter !== "all"
-                  ? "No results match your filters."
-                  : "Click 'Add Enrollment' to get started."}
+                Import students from <strong>Class Lists</strong> → toggle a P-Level → "Import to Transport".
               </p>
+              <Button onClick={() => navigate('/accountant/class-lists')}
+                style={{ backgroundColor: "#800020", color: "#FFFFFF" }}>
+                Go to Class Lists
+              </Button>
             </div>
           ) : (
             <div className="border rounded-lg overflow-x-auto" style={{ borderColor: "#E5E5E7" }}>
               <Table>
                 <TableHeader style={{ backgroundColor: "#001F5B" }}>
                   <TableRow>
-                    <TableHead className="text-white">Student</TableHead>
+                    <TableHead className="text-white sticky left-0" style={{ backgroundColor: "#001F5B" }}>Name</TableHead>
                     <TableHead className="text-white">Class</TableHead>
+                    {MONTHS.map((m, i) => (
+                      <TableHead key={m} className="text-white text-center">{MONTH_LABEL[i]} Month</TableHead>
+                    ))}
                     <TableHead className="text-white">Zone</TableHead>
-                    <TableHead className="text-white">Price</TableHead>
-                    <TableHead className="text-white">Payment Date</TableHead>
-                    <TableHead className="text-white">Expires</TableHead>
-                    <TableHead className="text-white">Status</TableHead>
                     <TableHead className="text-white text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredEnrollments.map((e, index) => {
-                    const badge = expiryBadge(e.expiry_date);
-                    const cls = e.student?.current_class
-                      ? `${e.student.current_class.p_level?.name ?? ''}${e.student.current_class.name}`
-                      : '—';
-                    return (
-                      <TableRow key={e.id}
-                        style={{ backgroundColor: index % 2 === 0 ? "#FFFFFF" : "#F4F4F6" }}>
-                        <TableCell className="font-medium" style={{ color: "#2C2C2C" }}>
-                          {e.student?.name ?? '—'}
+                  {filtered.map((e, index) => (
+                    <TableRow key={e.id} style={{ backgroundColor: index % 2 === 0 ? "#FFFFFF" : "#F4F4F6" }}>
+                      <TableCell className="font-medium sticky left-0"
+                        style={{ color: "#2C2C2C", backgroundColor: index % 2 === 0 ? "#FFFFFF" : "#F4F4F6" }}>
+                        {e.student?.name ?? '—'}
+                        {savingId === e.id && <Loader2 className="inline ml-2 h-3 w-3 animate-spin" />}
+                      </TableCell>
+                      <TableCell>
+                        <span className="px-2 py-1 rounded text-xs font-semibold text-white"
+                          style={{ backgroundColor: "#001F5B" }}>{classLabel(e)}</span>
+                      </TableCell>
+                      {MONTHS.map(m => (
+                        <TableCell key={m} className="text-center">
+                          <div className="flex justify-center">
+                            <Checkbox
+                              checked={!!e.payments?.[`${m}`]}
+                              disabled={!e.zone_id}
+                              onCheckedChange={() => togglePayment(e, m)}
+                            />
+                          </div>
                         </TableCell>
-                        <TableCell>
-                          <span className="px-2 py-1 rounded text-xs font-semibold text-white"
-                            style={{ backgroundColor: "#001F5B" }}>
-                            {cls}
-                          </span>
-                        </TableCell>
-                        <TableCell style={{ color: "#2C2C2C" }}>
-                          {e.zone?.name ?? '—'}
-                        </TableCell>
-                        <TableCell style={{ color: "#2C2C2C" }}>
-                          {e.zone?.price != null ? `${e.zone.price.toLocaleString()} RWF` : '—'}
-                        </TableCell>
-                        <TableCell style={{ color: "#2C2C2C" }}>
-                          {new Date(e.payment_date).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell style={{ color: isExpired(e.expiry_date) ? "#C0392B" : "#2C2C2C" }}>
-                          {new Date(e.expiry_date).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell>
-                          <span className="px-2 py-1 rounded-full text-xs font-semibold text-white"
-                            style={{ backgroundColor: badge.color }}>
-                            {badge.label}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm"><MoreVertical size={16} /></Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem className="text-red-600"
-                                onClick={() => { setSelectedEnrollment(e); setShowDeleteDialog(true); }}>
-                                Archive Enrollment
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                      ))}
+                      <TableCell>
+                        <Select value={e.zone_id ? String(e.zone_id) : ""} onValueChange={(v) => setZone(e, v)}>
+                          <SelectTrigger className="w-32 h-9">
+                            <SelectValue placeholder="Select zone" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {zones.length === 0 ? (
+                              <SelectItem value="__none" disabled>No zones</SelectItem>
+                            ) : zones.map(z => (
+                              <SelectItem key={z.id} value={String(z.id)}>{z.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm"><MoreVertical size={16} /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem className="text-red-600" onClick={() => handleWaive(e)}>
+                              Remove from Transport
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </div>
           )}
           {!loading && (
             <p className="text-sm mt-3" style={{ color: "#9A9A9A" }}>
-              {filteredEnrollments.length} enrollment{filteredEnrollments.length !== 1 ? 's' : ''}
+              {filtered.length} student{filtered.length !== 1 ? 's' : ''} in transport
             </p>
           )}
         </CardContent>
       </Card>
-
-      {/* Add Enrollment Dialog */}
-      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Add Transport Enrollment</DialogTitle>
-            <DialogDescription>Enroll a student in a transport zone</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
-              <Label>Search Student</Label>
-              <Input value={studentSearch} onChange={e => setStudentSearch(e.target.value)}
-                placeholder="Type name or class..." className="mt-2 h-11" />
-              {studentsLoading ? (
-                <div className="flex items-center gap-2 mt-2">
-                  <Loader2 size={14} className="animate-spin" style={{ color: "#9A9A9A" }} />
-                  <span className="text-sm" style={{ color: "#9A9A9A" }}>Loading students...</span>
-                </div>
-              ) : studentSearch && (
-                <div className="mt-1 border rounded-lg max-h-48 overflow-y-auto" style={{ borderColor: "#E5E5E7" }}>
-                  {filteredStudents.length === 0 ? (
-                    <p className="p-3 text-sm" style={{ color: "#9A9A9A" }}>No students found</p>
-                  ) : filteredStudents.map(s => (
-                    <button key={s.id}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between"
-                      onClick={() => {
-                        setSelectedStudentId(String(s.id));
-                        setStudentSearch(s.name);
-                      }}
-                      style={{
-                        backgroundColor: selectedStudentId === String(s.id) ? '#FFF5F7' : undefined,
-                        color: "#2C2C2C",
-                      }}>
-                      <span>{s.name}</span>
-                      <span className="text-xs px-2 py-0.5 rounded text-white"
-                        style={{ backgroundColor: "#001F5B" }}>{s.className}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <Label>Transport Zone</Label>
-              <Select value={selectedZoneId} onValueChange={setSelectedZoneId}>
-                <SelectTrigger className="w-full h-11 mt-2">
-                  <SelectValue placeholder="Select zone" />
-                </SelectTrigger>
-                <SelectContent>
-                  {zones.map(z => (
-                    <SelectItem key={z.id} value={String(z.id)}>
-                      {z.name} — {z.price.toLocaleString()} RWF
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {zones.length === 0 && (
-                <p className="text-sm mt-1" style={{ color: "#D97706" }}>
-                  No zones available. Please create zones first.
-                </p>
-              )}
-            </div>
-
-            <div>
-              <Label>Payment Date</Label>
-              <Input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)}
-                className="mt-2 h-11" />
-            </div>
-
-            <div>
-              <Label>Duration</Label>
-              <Select value={durationDays} onValueChange={setDurationDays}>
-                <SelectTrigger className="w-full h-11 mt-2"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {DURATION_OPTIONS.map(o => (
-                    <SelectItem key={o.days} value={String(o.days)}>{o.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {paymentDate && selectedZone && (
-              <div className="p-3 rounded-lg space-y-1" style={{ backgroundColor: "#F4F4F6" }}>
-                <p className="text-sm" style={{ color: "#9A9A9A" }}>
-                  <strong style={{ color: "#2C2C2C" }}>Zone:</strong> {selectedZone.name} — {selectedZone.price.toLocaleString()} RWF
-                </p>
-                <p className="text-sm" style={{ color: "#9A9A9A" }}>
-                  <strong style={{ color: "#2C2C2C" }}>Expires on:</strong> {expiryDate}
-                </p>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowAddDialog(false)}>Cancel</Button>
-            <Button onClick={handleAdd} disabled={saving || !selectedStudentId || !selectedZoneId}
-              style={{ backgroundColor: "#800020", color: "#FFFFFF" }}>
-              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Add Enrollment
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Archive Confirmation */}
-      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Archive Enrollment?</DialogTitle>
-            <DialogDescription>
-              Archive transport enrollment for {selectedEnrollment?.student?.name}?
-              This will mark it as inactive but preserve the record.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowDeleteDialog(false)}>Cancel</Button>
-            <Button onClick={handleDelete} disabled={saving}
-              style={{ backgroundColor: "#C0392B", color: "#FFFFFF" }}>
-              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Archive
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
