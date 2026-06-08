@@ -30,10 +30,20 @@ interface Enrollment {
   } | null;
 }
 
+// Timezone-safe: parse YYYY-MM-DD as a LOCAL date (not UTC) so the expiry
+// stays in sync with the exact date the accountant picked.
 function addMonths(dateStr: string, months: number): string {
-  const d = new Date(dateStr);
-  d.setMonth(d.getMonth() + months);
-  return d.toISOString().split('T')[0];
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1 + months, d);
+  const yy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+function fmtLocal(dateStr: string): string {
+  if (!dateStr) return '';
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 function cellState(cell?: PaymentCell): "none" | "active" | "soon" | "expired" {
   if (!cell) return "none";
@@ -359,7 +369,7 @@ export function TransportEnrollment() {
             {payDate && (
               <div className="p-3 rounded-lg" style={{ backgroundColor: "#F0FDF4" }}>
                 <p className="text-sm" style={{ color: "#1A7F4B" }}>
-                  <strong>Expires on:</strong> {new Date(addMonths(payDate, +payMonths)).toLocaleDateString()}
+                  Paid <strong>{fmtLocal(payDate)}</strong> → expires <strong>{fmtLocal(addMonths(payDate, +payMonths))}</strong>
                 </p>
                 <p className="text-xs mt-1" style={{ color: "#15803D" }}>
                   You'll be reminded as this date approaches.
