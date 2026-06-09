@@ -10,13 +10,15 @@ import { Label } from "../../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { toast } from "sonner";
 import { api } from "../../../lib/api";
+import { useAutoRefresh } from "../../../lib/useAutoRefresh";
 
 interface ClassData {
   id: number;
   name: string;
   teacher_id: number | null;
   teacher: { id: number; name: string } | null;
-  students: any[];
+  students?: any[];
+  student_count?: number;
   status: string;
 }
 
@@ -68,6 +70,7 @@ export function ClassManagement() {
   }, [pLevelId]);
 
   useEffect(() => { load(); }, [load]);
+  useAutoRefresh(load);
 
   const handleAddClass = async () => {
     if (!newClassName.trim() || !pLevelId) return;
@@ -164,7 +167,7 @@ export function ClassManagement() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {classes.map((classItem) => {
-            const studentCount = classItem.students?.length ?? 0;
+            const studentCount = classItem.student_count ?? classItem.students?.length ?? 0;
             return (
               <Card key={classItem.id} style={{ borderColor: "#E5E5E7" }}>
                 <CardContent className="p-6">

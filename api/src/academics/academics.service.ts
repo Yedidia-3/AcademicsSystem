@@ -95,11 +95,27 @@ export class AcademicsService {
   // ─── Classes ─────────────────────────────────────────────────────────────────
 
   async listClasses(pLevelId: number) {
-    return this.classRepo.find({
-      where: { p_level_id: pLevelId, status: 'active' },
-      relations: ['teacher'],
-      order: { name: 'ASC' },
-    });
+    // Raw SQL — reliable student counts + teacher name + distribution status.
+    const rows = await this.classRepo.query(
+      `SELECT c.id, c.name, c.p_level_id, c.teacher_id, c.status, c.distributed_at,
+              t.name AS teacher_name,
+              (SELECT COUNT(*) FROM students s WHERE s.current_class_id = c.id) AS student_count
+       FROM classes c
+       LEFT JOIN users t ON t.id = c.teacher_id
+       WHERE c.p_level_id = $1 AND c.status = 'active'
+       ORDER BY c.name ASC`,
+      [pLevelId],
+    );
+    return rows.map((c: any) => ({
+      id: c.id,
+      name: c.name,
+      p_level_id: c.p_level_id,
+      teacher_id: c.teacher_id,
+      status: c.status,
+      distributed_at: c.distributed_at,
+      teacher: c.teacher_id ? { id: c.teacher_id, name: c.teacher_name } : null,
+      student_count: Number(c.student_count ?? 0),
+    }));
   }
 
   async createClass(name: string, pLevelId: number) {
