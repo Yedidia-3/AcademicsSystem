@@ -29,10 +29,51 @@ export class AcademicsService {
   }
 
   async listPLevels(academicYearId: number) {
-    return this.pLevelRepo.find({
-      where: { academic_year_id: academicYearId, status: 'active' },
-      relations: ['classes'],
-      order: { name: 'ASC' },
+    // Raw SQL — TypeORM relation loading is unreliable here and doesn't carry
+    // student counts. Return each P-Level with its active classes, the per-class
+    // student count, and distribution status so the Dean's P-Levels module and
+    // dashboard reflect distributed classes accurately.
+    const plevels = await this.pLevelRepo.query(
+      `SELECT id, name, academic_year_id, status
+       FROM p_levels
+       WHERE academic_year_id = $1 AND status = 'active'
+       ORDER BY name ASC`,
+      [academicYearId],
+    );
+    if (!plevels.length) return [];
+
+    const plIds = plevels.map((p: any) => p.id);
+    const classes = await this.classRepo.query(
+      `SELECT c.id, c.name, c.p_level_id, c.teacher_id, c.distributed_at,
+              (SELECT COUNT(*) FROM students s WHERE s.current_class_id = c.id) AS student_count
+       FROM classes c
+       WHERE c.p_level_id = ANY($1) AND c.status = 'active'
+       ORDER BY c.name ASC`,
+      [plIds],
+    );
+
+    const byPl = new Map<number, any[]>();
+    for (const c of classes) {
+      if (!byPl.has(c.p_level_id)) byPl.set(c.p_level_id, []);
+      byPl.get(c.p_level_id)!.push({
+        id: c.id,
+        name: c.name,
+        teacher_id: c.teacher_id,
+        distributed_at: c.distributed_at,
+        student_count: Number(c.student_count ?? 0),
+      });
+    }
+
+    return plevels.map((p: any) => {
+      const cls = byPl.get(p.id) ?? [];
+      return {
+        ...p,
+        classes: cls,
+        class_count: cls.length,
+        student_count: cls.reduce((s: number, c: any) => s + c.student_count, 0),
+        is_distributed: cls.length > 0 && cls.every((c: any) => c.distributed_at),
+        any_distributed: cls.some((c: any) => c.distributed_at),
+      };
     });
   }
 

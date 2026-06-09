@@ -7,7 +7,7 @@ import { api } from "../../../lib/api";
 import { useAutoRefresh } from "../../../lib/useAutoRefresh";
 
 interface AcademicYear { id: number; name: string; status: string; }
-interface PLevel { id: number; name: string; status: string; classes: { id: number; students: any[] }[]; }
+interface PLevel { id: number; name: string; status: string; classes: { id: number; students?: any[]; student_count?: number }[]; student_count?: number; }
 interface ShuffleSession { id: number; status: string; p_level: { id: number; name: string }; student_count?: number; }
 
 const statusColor: Record<string, string> = {
@@ -60,7 +60,8 @@ export function DeanDashboard() {
   useEffect(() => { load(); }, [load]);
   useAutoRefresh(load);
 
-  const totalStudents = pLevels.reduce((sum, pl) => sum + (pl.classes?.reduce((s, c) => s + (c.students?.length ?? 0), 0) ?? 0), 0);
+  const totalStudents = pLevels.reduce((sum, pl) =>
+    sum + (pl.student_count ?? pl.classes?.reduce((s, c) => s + (c.student_count ?? c.students?.length ?? 0), 0) ?? 0), 0);
   const pendingCount     = sessions.filter(s => s.status === 'pending_approval').length;
   const approvedCount    = sessions.filter(s => s.status === 'approved').length;
   const distributedCount = sessions.filter(s => s.status === 'distributed').length;

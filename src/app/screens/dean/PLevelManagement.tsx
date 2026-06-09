@@ -9,9 +9,19 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { toast } from "sonner";
 import { api } from "../../../lib/api";
+import { useAutoRefresh } from "../../../lib/useAutoRefresh";
 
 interface AcademicYear { id: number; name: string; status: string; }
-interface PLevel { id: number; name: string; academic_year_id: number; classes: { id: number; students: any[] }[]; }
+interface PLevel {
+  id: number;
+  name: string;
+  academic_year_id: number;
+  classes: { id: number; students?: any[]; student_count?: number }[];
+  class_count?: number;
+  student_count?: number;
+  is_distributed?: boolean;
+  any_distributed?: boolean;
+}
 
 export function PLevelManagement() {
   const navigate = useNavigate();
@@ -42,6 +52,7 @@ export function PLevelManagement() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useAutoRefresh(load);
 
   const handleAdd = async () => {
     if (!newPLevelName.trim() || !activeYear) return;
@@ -114,13 +125,24 @@ export function PLevelManagement() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {pLevels.map((pl) => {
-            const classCount = pl.classes?.length ?? 0;
-            const studentCount = pl.classes?.reduce((sum, c) => sum + (c.students?.length ?? 0), 0) ?? 0;
+            const classCount = pl.class_count ?? pl.classes?.length ?? 0;
+            const studentCount = pl.student_count
+              ?? pl.classes?.reduce((sum, c) => sum + (c.student_count ?? c.students?.length ?? 0), 0)
+              ?? 0;
+            const distributed = pl.is_distributed || pl.any_distributed;
             return (
               <Card key={pl.id} style={{ borderColor: "#E5E5E7" }}>
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between mb-4">
-                    <h3 className="text-2xl font-bold" style={{ color: "#2C2C2C" }}>{pl.name}</h3>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-2xl font-bold" style={{ color: "#2C2C2C" }}>{pl.name}</h3>
+                      {distributed && (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold text-white"
+                          style={{ backgroundColor: pl.is_distributed ? "#1A7F4B" : "#D97706" }}>
+                          {pl.is_distributed ? "Distributed" : "Partly distributed"}
+                        </span>
+                      )}
+                    </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm"><MoreVertical size={18} /></Button>
