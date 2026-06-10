@@ -1,6 +1,8 @@
 import { Outlet, useNavigate, useLocation, Navigate } from "react-router";
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useAuth } from "../../lib/auth";
+import { api } from "../../lib/api";
+import { useAutoRefresh } from "../../lib/useAutoRefresh";
 import {
   Bell, User, LogOut, Settings, LayoutDashboard, Users, FileText,
   GraduationCap, ClipboardCheck, BookOpen, DollarSign, Menu, X, Share2,
@@ -55,7 +57,21 @@ export function AuthLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const { user, logout, isAuthenticated } = useAuth();
+
+  const loadUnread = useCallback(async () => {
+    try {
+      const res = await api.get<any>('/api/v1/notifications/unread-count');
+      const count = typeof res === 'number' ? res : (res?.count ?? res?.data ?? 0);
+      setUnreadCount(Number(count) || 0);
+    } catch { /* ignore */ }
+  }, []);
+
+  // Initial load + reload whenever the route changes (e.g. leaving the
+  // notification center after marking read), plus a poll for live updates.
+  useEffect(() => { loadUnread(); }, [loadUnread, location.pathname]);
+  useAutoRefresh(loadUnread, 15000);
 
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (user?.must_change_password) return <Navigate to="/change-password" replace />;
@@ -185,8 +201,16 @@ export function AuthLayout() {
           <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
             {/* Notifications */}
             <button onClick={() => navigate("/notifications")}
-              className="relative p-2 rounded-md hover:bg-gray-100 transition-colors">
+              className="relative p-2 rounded-md hover:bg-gray-100 transition-colors"
+              title={unreadCount > 0 ? `${unreadCount} unread` : 'Notifications'}>
               <Bell size={20} style={{ color: "#C9A84C" }} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full
+                  flex items-center justify-center text-[10px] font-bold text-white"
+                  style={{ backgroundColor: "#C0392B" }}>
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
             </button>
 
             {/* User dropdown */}
