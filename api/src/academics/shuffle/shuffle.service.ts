@@ -368,18 +368,24 @@ export class ShuffleService {
     return rows.map(this.mapSessionRow);
   }
 
-  // Lists every shuffle session (for the Dean's Distribution module)
+  // Dean's Distribution module — only the LATEST session per P-Level, so a
+  // re-run after a rejection supersedes the old bar instead of stacking up.
   async getDeanSessions() {
     const rows = await this.sessionRepo.query(
-      `SELECT ss.id, ss.status, ss.algorithm, ss.p_level_id,
-              ss.submitted_at, ss.reviewed_at, ss.distributed_at, ss.rejection_note,
-              pl.name AS p_level_name,
-              u.name  AS submitted_by_name,
-              (SELECT COUNT(*) FROM shuffle_results r WHERE r.shuffle_session_id = ss.id) AS student_count
-       FROM shuffle_sessions ss
-       JOIN p_levels pl ON pl.id = ss.p_level_id
-       LEFT JOIN users u ON u.id = ss.submitted_by
-       ORDER BY ss.updated_at DESC`,
+      `SELECT * FROM (
+         SELECT DISTINCT ON (ss.p_level_id)
+                ss.id, ss.status, ss.algorithm, ss.p_level_id,
+                ss.submitted_at, ss.reviewed_at, ss.distributed_at, ss.rejection_note,
+                ss.created_at, ss.updated_at,
+                pl.name AS p_level_name,
+                u.name  AS submitted_by_name,
+                (SELECT COUNT(*) FROM shuffle_results r WHERE r.shuffle_session_id = ss.id) AS student_count
+         FROM shuffle_sessions ss
+         JOIN p_levels pl ON pl.id = ss.p_level_id
+         LEFT JOIN users u ON u.id = ss.submitted_by
+         ORDER BY ss.p_level_id, ss.created_at DESC
+       ) latest
+       ORDER BY latest.updated_at DESC`,
     );
     return rows.map(this.mapSessionRow);
   }
