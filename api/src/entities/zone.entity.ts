@@ -6,6 +6,10 @@ export class Zone {
   @PrimaryGeneratedColumn()
   id: number;
 
+  // Scopes the zone to an academic year so it resets when a new year starts.
+  @Column({ nullable: true })
+  academic_year_id: number;
+
   @Column({ length: 100 })
   name: string;
 

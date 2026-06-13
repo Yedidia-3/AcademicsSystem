@@ -16,14 +16,29 @@ export class AccountantService {
     @InjectRepository(Student) private studentRepo: Repository<Student>,
   ) {}
 
+  // ─── Active-year helper ───────────────────────────────────────────────────
+  // Everything the accountant sees is scoped to the active academic year, so
+  // starting a new year cleans enrollments and zones automatically.
+  private async activeYearId(): Promise<number | null> {
+    const r = await this.zoneRepo.query(
+      `SELECT id FROM academic_years WHERE status = 'active' ORDER BY created_at DESC LIMIT 1`,
+    );
+    return r[0]?.id ?? null;
+  }
+
   // ─── Zones ──────────────────────────────────────────────────────────────────
 
   async listZones() {
-    return this.zoneRepo.find({ where: { status: 'active' }, order: { name: 'ASC' } });
+    const yid = await this.activeYearId();
+    return this.zoneRepo.find({
+      where: { status: 'active', academic_year_id: yid ?? -1 },
+      order: { name: 'ASC' },
+    });
   }
 
   async createZone(dto: CreateZoneDto) {
-    const zone = this.zoneRepo.create(dto);
+    const yid = await this.activeYearId();
+    const zone = this.zoneRepo.create({ ...dto, academic_year_id: yid ?? null });
     return this.zoneRepo.save(zone);
   }
 
@@ -64,6 +79,7 @@ export class AccountantService {
        LEFT JOIN p_levels pl  ON pl.id = c.p_level_id
        LEFT JOIN zones z      ON z.id  = e.zone_id
        WHERE e.status = 'active' ${typeClause}
+         AND s.academic_year_id = (SELECT id FROM academic_years WHERE status = 'active' ORDER BY created_at DESC LIMIT 1)
        ORDER BY e.created_at DESC`,
       params,
     );

@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useCallback } from "react";
-import { Search, Plus, MoreVertical, Copy, Check, KeyRound, UserX, Loader2 } from "lucide-react";
+import { Search, Plus, MoreVertical, Copy, Check, KeyRound, UserX, Loader2, Pencil } from "lucide-react";
 import { Card, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -79,6 +79,14 @@ export function UserManagement() {
   const [resetResult, setResetResult] = useState<{ name: string; password: string } | null>(null);
   const [resetOpen, setResetOpen] = useState(false);
 
+  // Edit user dialog
+  const [editOpen, setEditOpen] = useState(false);
+  const [editUser, setEditUser] = useState<User | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState("");
+
   const loadUsers = useCallback(async () => {
     try {
       const res = await api.get<{ data: User[] }>("/api/v1/admin/users");
@@ -120,6 +128,33 @@ export function UserManagement() {
       setAddError(err.message ?? "Failed to create user");
     } finally {
       setAddLoading(false);
+    }
+  };
+
+  const openEdit = (user: User) => {
+    setEditUser(user);
+    setEditName(user.name);
+    setEditEmail(user.email);
+    setEditError("");
+    setEditOpen(true);
+  };
+
+  const handleEditUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editUser) return;
+    setEditError("");
+    setEditSaving(true);
+    try {
+      await api.put(`/api/v1/admin/users/${editUser.id}`, {
+        name: editName.trim(),
+        email: editEmail.trim(),
+      });
+      await loadUsers();
+      setEditOpen(false);
+    } catch (err: any) {
+      setEditError(err.message ?? "Failed to update user");
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -263,6 +298,9 @@ export function UserManagement() {
                               <Button variant="ghost" size="sm"><MoreVertical size={16} /></Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => openEdit(user)}>
+                                <Pencil size={14} className="mr-2" /> Edit details
+                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => handleResetPassword(user)}>
                                 <KeyRound size={14} className="mr-2" /> Reset password
                               </DropdownMenuItem>
@@ -407,6 +445,39 @@ export function UserManagement() {
           <DialogFooter>
             <Button onClick={() => setResetOpen(false)} style={{ backgroundColor: "#001F5B", color: "#fff" }}>Done</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Edit User Dialog ── */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEditUser} className="space-y-4 py-2">
+            <div>
+              <Label>Full Name</Label>
+              <Input className="mt-2 h-11" value={editName}
+                onChange={(e) => setEditName(e.target.value)} required />
+            </div>
+            <div>
+              <Label>Email Address</Label>
+              <Input className="mt-2 h-11" type="email" value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)} required />
+            </div>
+            {editError && (
+              <p className="text-sm p-3 rounded-md" style={{ backgroundColor: "#FEE", color: "#C0392B" }}>
+                {editError}
+              </p>
+            )}
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={editSaving}
+                style={{ backgroundColor: "#800020", color: "#fff" }}>
+                {editSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

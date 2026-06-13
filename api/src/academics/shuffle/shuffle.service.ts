@@ -363,6 +363,7 @@ export class ShuffleService {
        JOIN p_levels pl ON pl.id = ss.p_level_id
        LEFT JOIN users u ON u.id = ss.submitted_by
        WHERE ss.status = 'pending_approval'
+         AND ss.academic_year_id = (SELECT id FROM academic_years WHERE status = 'active' ORDER BY created_at DESC LIMIT 1)
        ORDER BY ss.submitted_at ASC`,
     );
     return rows.map(this.mapSessionRow);
@@ -383,6 +384,7 @@ export class ShuffleService {
          FROM shuffle_sessions ss
          JOIN p_levels pl ON pl.id = ss.p_level_id
          LEFT JOIN users u ON u.id = ss.submitted_by
+         WHERE ss.academic_year_id = (SELECT id FROM academic_years WHERE status = 'active' ORDER BY created_at DESC LIMIT 1)
          ORDER BY ss.p_level_id, ss.created_at DESC
        ) latest
        ORDER BY latest.updated_at DESC`,
