@@ -14,6 +14,7 @@ import { Student } from './entities/student.entity';
 import { User } from './entities/user.entity';
 import { Zone } from './entities/zone.entity';
 import { Attendance } from './entities/attendance.entity';
+import { AttendanceSession } from './entities/attendance-session.entity';
 import { AcademicsModule } from './academics/academics.module';
 import { AccountantModule } from './accountant/accountant.module';
 import { AdminModule } from './admin/admin.module';
@@ -53,7 +54,7 @@ import { NotificationsModule } from './notifications/notifications.module';
         return {
           type: 'postgres',
           ...dbConn,
-          entities: [User, AcademicYear, PLevel, Class, Student, ShuffleSession, ShuffleResult, Zone, Enrollment, Notification, Attendance],
+          entities: [User, AcademicYear, PLevel, Class, Student, ShuffleSession, ShuffleResult, Zone, Enrollment, Notification, Attendance, AttendanceSession],
           // In production, disable auto-sync by default.
           // Set SYNCHRONIZE_DB=true on the first Railway deploy to create tables,
           // then remove/set to false once the schema is stable.

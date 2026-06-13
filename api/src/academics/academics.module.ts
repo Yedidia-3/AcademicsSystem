@@ -7,6 +7,7 @@ import { ShuffleResult } from '../entities/shuffle-result.entity';
 import { ShuffleSession } from '../entities/shuffle-session.entity';
 import { Student } from '../entities/student.entity';
 import { Attendance } from '../entities/attendance.entity';
+import { AttendanceSession } from '../entities/attendance-session.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { AcademicsController } from './academics.controller';
 import { AcademicsService } from './academics.service';
@@ -15,7 +16,7 @@ import { ShuffleService } from './shuffle/shuffle.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([PLevel, Class, Student, ShuffleSession, ShuffleResult, AcademicYear, Attendance]),
+    TypeOrmModule.forFeature([PLevel, Class, Student, ShuffleSession, ShuffleResult, AcademicYear, Attendance, AttendanceSession]),
     NotificationsModule,
   ],
   controllers: [AcademicsController, ShuffleController],

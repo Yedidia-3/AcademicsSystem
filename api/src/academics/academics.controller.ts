@@ -134,6 +134,22 @@ export class AcademicsController {
     return this.academicsService.saveClassAttendance(+id, date, records, user.id);
   }
 
+  @Post('classes/:id/attendance/reset')
+  @Roles('teacher')
+  resetAttendance(
+    @Param('id') id: string,
+    @Body('date') date: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.academicsService.resetClassAttendance(+id, date, user.id);
+  }
+
+  @Get('teacher/attendance-history')
+  @Roles('teacher')
+  getAttendanceHistory(@CurrentUser() user: User) {
+    return this.academicsService.getTeacherAttendanceHistory(user.id);
+  }
+
   // Accountant portal
   @Get('all-classes')
   @Roles('accountant')

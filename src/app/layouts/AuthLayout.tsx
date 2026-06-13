@@ -43,6 +43,7 @@ const navItems = {
   teacher: [
     { icon: LayoutDashboard, label: "Dashboard", path: "/teacher/dashboard" },
     { icon: BookOpen,        label: "My Classes", path: "/teacher/dashboard" },
+    { icon: ClipboardCheck,  label: "Attendance History", path: "/teacher/attendance-history" },
   ],
   accountant: [
     { icon: LayoutDashboard, label: "Dashboard",   path: "/accountant/dashboard" },

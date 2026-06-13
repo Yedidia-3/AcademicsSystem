@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router";
-import { ArrowLeft, Loader2, Check, X, Clock, Save, Users } from "lucide-react";
+import { ArrowLeft, Loader2, Check, X, Clock, Save, Users, Lock, RotateCcw, History } from "lucide-react";
 import { Card, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { api } from "../../../lib/api";
 import { toast } from "sonner";
 
@@ -16,10 +17,10 @@ interface AttendanceRow {
   status: Status;
 }
 
-const STATUS_META: Record<Status, { label: string; color: string; bg: string; Icon: any }> = {
-  present: { label: "Present", color: "#1A7F4B", bg: "#1A7F4B", Icon: Check },
-  absent:  { label: "Absent",  color: "#C0392B", bg: "#C0392B", Icon: X },
-  late:    { label: "Late",    color: "#D97706", bg: "#D97706", Icon: Clock },
+const STATUS_META: Record<Status, { label: string; color: string; Icon: any }> = {
+  present: { label: "Present", color: "#1A7F4B", Icon: Check },
+  absent:  { label: "Absent",  color: "#C0392B", Icon: X },
+  late:    { label: "Late",    color: "#D97706", Icon: Clock },
 };
 
 export function AttendanceScreen() {
@@ -29,11 +30,13 @@ export function AttendanceScreen() {
   const className = searchParams.get("name") ?? `Class ${classId}`;
 
   const today = new Date().toISOString().split("T")[0];
-  const [date, setDate] = useState(today);
+  const [date, setDate] = useState(searchParams.get("date") || today);
   const [rows, setRows] = useState<AttendanceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [alreadyMarked, setAlreadyMarked] = useState(false);
+  const [locked, setLocked] = useState(false);
+  const [submittedAt, setSubmittedAt] = useState<string | null>(null);
+  const [showReset, setShowReset] = useState(false);
 
   const load = useCallback(async () => {
     if (!classId) return;
@@ -41,7 +44,8 @@ export function AttendanceScreen() {
     try {
       const res = await api.get<any>(`/api/v1/academics/classes/${classId}/attendance?date=${date}`);
       setRows(res.records ?? []);
-      setAlreadyMarked(!!res.already_marked);
+      setLocked(!!res.locked);
+      setSubmittedAt(res.submitted_at ?? null);
     } catch {
       toast.error("Failed to load attendance");
     } finally {
@@ -51,11 +55,14 @@ export function AttendanceScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  const setStatus = (studentId: number, status: Status) =>
+  const setStatus = (studentId: number, status: Status) => {
+    if (locked) return;
     setRows(rs => rs.map(r => r.student_id === studentId ? { ...r, status } : r));
-
-  const markAll = (status: Status) =>
+  };
+  const markAll = (status: Status) => {
+    if (locked) return;
     setRows(rs => rs.map(r => ({ ...r, status })));
+  };
 
   const counts = {
     present: rows.filter(r => r.status === "present").length,
@@ -71,10 +78,28 @@ export function AttendanceScreen() {
         date,
         records: rows.map(r => ({ student_id: r.student_id, status: r.status })),
       });
-      toast.success(`Attendance saved · ${counts.present} present, ${counts.absent} absent, ${counts.late} late`);
-      setAlreadyMarked(true);
+      toast.success(`Attendance submitted to the Dean · ${counts.present} present, ${counts.absent} absent, ${counts.late} late`);
+      setLocked(true);
+      setSubmittedAt(new Date().toISOString());
     } catch (err: any) {
-      toast.error(err.message ?? "Failed to save attendance");
+      toast.error(err.message ?? "Failed to submit attendance");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReset = async () => {
+    if (!classId) return;
+    setSaving(true);
+    try {
+      await api.post(`/api/v1/academics/classes/${classId}/attendance/reset`, { date });
+      toast.success("Attendance reset — you can record it again");
+      setShowReset(false);
+      setLocked(false);
+      setSubmittedAt(null);
+      await load();
+    } catch (err: any) {
+      toast.error(err.message ?? "Failed to reset");
     } finally {
       setSaving(false);
     }
@@ -87,10 +112,14 @@ export function AttendanceScreen() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <Button variant="ghost" size="sm" onClick={() => navigate("/teacher/dashboard")}
           style={{ color: "#800020" }}>
           <ArrowLeft size={18} className="mr-2" /> Back to Dashboard
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => navigate("/teacher/attendance-history")}
+          style={{ color: "#001F5B" }}>
+          <History size={16} className="mr-2" /> Attendance History
         </Button>
       </div>
 
@@ -99,18 +128,37 @@ export function AttendanceScreen() {
           <h1 className="text-2xl font-semibold" style={{ color: "#2C2C2C" }}>
             {className} — Attendance
           </h1>
-          <p className="text-sm mt-1" style={{ color: "#9A9A9A" }}>
-            {fmtDate(date)}{alreadyMarked && " · already recorded (you can update it)"}
-          </p>
+          <p className="text-sm mt-1" style={{ color: "#9A9A9A" }}>{fmtDate(date)}</p>
         </div>
-        <div className="flex items-end gap-2">
-          <div>
-            <label className="text-xs block mb-1" style={{ color: "#9A9A9A" }}>Date</label>
-            <Input type="date" value={date} max={today}
-              onChange={e => setDate(e.target.value)} className="h-11 w-44" />
-          </div>
+        <div>
+          <label className="text-xs block mb-1" style={{ color: "#9A9A9A" }}>Date</label>
+          <Input type="date" value={date} max={today}
+            onChange={e => setDate(e.target.value)} className="h-11 w-44" />
         </div>
       </div>
+
+      {/* Locked banner */}
+      {locked && (
+        <Card style={{ borderColor: "#1A7F4B", backgroundColor: "#F0FDF4" }}>
+          <CardContent className="p-4 flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3">
+              <Lock size={20} style={{ color: "#1A7F4B" }} />
+              <div>
+                <p className="font-semibold text-sm" style={{ color: "#1A7F4B" }}>
+                  Submitted &amp; sent to the Dean
+                </p>
+                <p className="text-xs" style={{ color: "#15803D" }}>
+                  This day is locked. Made a mistake? Reset to record it again.
+                </p>
+              </div>
+            </div>
+            <Button variant="outline" onClick={() => setShowReset(true)}
+              style={{ color: "#C0392B", borderColor: "#C0392B" }}>
+              <RotateCcw size={16} className="mr-2" /> Reset
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Summary */}
       <div className="grid grid-cols-3 gap-3">
@@ -148,20 +196,21 @@ export function AttendanceScreen() {
             </div>
           ) : (
             <>
-              {/* quick actions */}
-              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                <span className="text-sm" style={{ color: "#9A9A9A" }}>{rows.length} students</span>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => markAll("present")}
-                    style={{ color: "#1A7F4B", borderColor: "#1A7F4B" }}>
-                    Mark all present
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => markAll("absent")}
-                    style={{ color: "#C0392B", borderColor: "#C0392B" }}>
-                    Mark all absent
-                  </Button>
+              {!locked && (
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                  <span className="text-sm" style={{ color: "#9A9A9A" }}>{rows.length} students</span>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => markAll("present")}
+                      style={{ color: "#1A7F4B", borderColor: "#1A7F4B" }}>
+                      Mark all present
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => markAll("absent")}
+                      style={{ color: "#C0392B", borderColor: "#C0392B" }}>
+                      Mark all absent
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="space-y-2">
                 {rows.map((r, index) => (
@@ -172,17 +221,16 @@ export function AttendanceScreen() {
                     <span className="flex-1 font-medium min-w-0 truncate" style={{ color: "#2C2C2C" }}>
                       {r.name}
                     </span>
-                    {/* segmented status control */}
                     <div className="inline-flex rounded-lg border overflow-hidden flex-shrink-0"
-                      style={{ borderColor: "#E5E5E7" }}>
+                      style={{ borderColor: "#E5E5E7", opacity: locked ? 0.85 : 1 }}>
                       {(["present", "absent", "late"] as Status[]).map(s => {
                         const meta = STATUS_META[s];
                         const active = r.status === s;
                         return (
-                          <button key={s} onClick={() => setStatus(r.student_id, s)}
-                            className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium transition-colors"
+                          <button key={s} onClick={() => setStatus(r.student_id, s)} disabled={locked}
+                            className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed"
                             style={{
-                              backgroundColor: active ? meta.bg : "#FFFFFF",
+                              backgroundColor: active ? meta.color : "#FFFFFF",
                               color: active ? "#FFFFFF" : "#9A9A9A",
                             }}>
                             <meta.Icon size={14} />
@@ -199,15 +247,36 @@ export function AttendanceScreen() {
         </CardContent>
       </Card>
 
-      {rows.length > 0 && !loading && (
+      {rows.length > 0 && !loading && !locked && (
         <div className="flex justify-end">
           <Button onClick={handleSave} disabled={saving} className="h-11"
             style={{ backgroundColor: "#800020", color: "#FFFFFF" }}>
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save size={18} className="mr-2" />}
-            Save Attendance
+            Submit Attendance
           </Button>
         </div>
       )}
+
+      {/* Reset confirmation */}
+      <Dialog open={showReset} onOpenChange={setShowReset}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reset this day's attendance?</DialogTitle>
+            <DialogDescription>
+              This clears the submitted attendance for {fmtDate(date)} so you can record it again.
+              The Dean will be notified of the correction.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowReset(false)}>Cancel</Button>
+            <Button onClick={handleReset} disabled={saving}
+              style={{ backgroundColor: "#C0392B", color: "#FFFFFF" }}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw size={16} className="mr-2" />}
+              Reset
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

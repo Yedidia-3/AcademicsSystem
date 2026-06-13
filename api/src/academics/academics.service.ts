@@ -7,6 +7,8 @@ import { PLevel } from '../entities/p-level.entity';
 import { Student } from '../entities/student.entity';
 import { AcademicYear } from '../entities/academic-year.entity';
 import { Attendance } from '../entities/attendance.entity';
+import { AttendanceSession } from '../entities/attendance-session.entity';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class AcademicsService {
@@ -16,6 +18,8 @@ export class AcademicsService {
     @InjectRepository(Student) private studentRepo: Repository<Student>,
     @InjectRepository(AcademicYear) private yearRepo: Repository<AcademicYear>,
     @InjectRepository(Attendance) private attendanceRepo: Repository<Attendance>,
+    @InjectRepository(AttendanceSession) private attendanceSessionRepo: Repository<AttendanceSession>,
+    private notificationsService: NotificationsService,
   ) {}
 
   // ─── P-Levels ────────────────────────────────────────────────────────────────
@@ -292,7 +296,7 @@ export class AcademicsService {
   // ─── Attendance ────────────────────────────────────────────────────────────
 
   // Class roster for a given day with each student's attendance status.
-  // Unmarked students default to "present".
+  // Once submitted the day is LOCKED (one attendance per day).
   async getClassAttendance(classId: number, date: string) {
     const students = await this.studentRepo.query(
       `SELECT id, name, rank FROM students
@@ -307,17 +311,26 @@ export class AcademicsService {
     const byStudent = new Map<number, string>();
     for (const m of marks) byStudent.set(m.student_id, m.status);
 
+    const session = await this.attendanceSessionRepo.findOne({ where: { class_id: classId, date } });
+
     const records = students.map((s: any) => ({
       student_id: s.id,
       name: s.name,
       rank: s.rank,
       status: byStudent.get(s.id) ?? 'present',
     }));
-    const alreadyMarked = marks.length > 0;
-    return { date, class_id: classId, already_marked: alreadyMarked, records };
+
+    return {
+      date,
+      class_id: classId,
+      locked: !!session,                 // submitted → read-only until reset
+      submitted_at: session?.submitted_at ?? null,
+      records,
+    };
   }
 
-  // Upsert attendance for a class on a date.
+  // Submit attendance for a class on a date — ONE per day. Locks the day,
+  // auto-notifies the Dean(s), and archives a session row for history.
   async saveClassAttendance(
     classId: number,
     date: string,
@@ -325,10 +338,15 @@ export class AcademicsService {
     markedBy: number,
   ) {
     if (!date) throw new BadRequestException('Date is required');
+
+    const existingSession = await this.attendanceSessionRepo.findOne({ where: { class_id: classId, date } });
+    if (existingSession) {
+      throw new BadRequestException('Attendance for this day is already submitted. Use Reset to redo it.');
+    }
+
+    // Persist per-student marks
     for (const r of records ?? []) {
-      const existing = await this.attendanceRepo.findOne({
-        where: { student_id: r.student_id, date },
-      });
+      const existing = await this.attendanceRepo.findOne({ where: { student_id: r.student_id, date } });
       if (existing) {
         existing.status = r.status;
         existing.class_id = classId;
@@ -337,19 +355,97 @@ export class AcademicsService {
       } else {
         await this.attendanceRepo.save(
           this.attendanceRepo.create({
-            student_id: r.student_id,
-            class_id: classId,
-            date,
-            status: r.status,
-            marked_by: markedBy,
+            student_id: r.student_id, class_id: classId, date, status: r.status, marked_by: markedBy,
           }),
         );
       }
     }
+
     const present = (records ?? []).filter(r => r.status === 'present').length;
     const absent = (records ?? []).filter(r => r.status === 'absent').length;
     const late = (records ?? []).filter(r => r.status === 'late').length;
-    return { message: 'Attendance saved', present, absent, late, total: records?.length ?? 0 };
+    const total = records?.length ?? 0;
+
+    // Archive the submitted session (locks the day)
+    await this.attendanceSessionRepo.save(
+      this.attendanceSessionRepo.create({
+        class_id: classId, date, marked_by: markedBy,
+        present, absent, late, total, submitted_at: new Date(),
+      }),
+    );
+
+    // Auto-submit to the Dean(s)
+    await this.notifyDeansOfAttendance(classId, date, markedBy, { present, absent, late, total });
+
+    return { message: 'Attendance submitted', locked: true, present, absent, late, total };
+  }
+
+  // Reset a day's attendance so the teacher can redo it (mistake correction).
+  async resetClassAttendance(classId: number, date: string, teacherId: number) {
+    if (!date) throw new BadRequestException('Date is required');
+    await this.attendanceRepo.query(
+      `DELETE FROM attendance WHERE class_id = $1 AND date = $2`, [classId, date],
+    );
+    await this.attendanceSessionRepo.query(
+      `DELETE FROM attendance_sessions WHERE class_id = $1 AND date = $2`, [classId, date],
+    );
+    // Inform the Dean the record was reset
+    await this.notifyDeansOfAttendance(classId, date, teacherId, null);
+    return { message: 'Attendance reset — you can record it again', locked: false };
+  }
+
+  // Submitted attendance history for a teacher's classes (archive view).
+  async getTeacherAttendanceHistory(teacherId: number) {
+    const rows = await this.attendanceSessionRepo.query(
+      `SELECT s.id, s.class_id, s.date::text AS date, s.present, s.absent, s.late, s.total,
+              s.submitted_at,
+              c.name AS class_name, pl.name AS p_level_name
+       FROM attendance_sessions s
+       JOIN classes c ON c.id = s.class_id
+       JOIN p_levels pl ON pl.id = c.p_level_id
+       WHERE c.teacher_id = $1
+       ORDER BY s.date DESC, s.submitted_at DESC`,
+      [teacherId],
+    );
+    return rows.map((r: any) => ({
+      id: r.id,
+      class_id: r.class_id,
+      class_label: `${r.p_level_name}${r.class_name}`,
+      date: r.date,
+      present: r.present, absent: r.absent, late: r.late, total: r.total,
+      submitted_at: r.submitted_at,
+    }));
+  }
+
+  // Notify dean(s) that attendance was submitted (or reset when summary=null).
+  private async notifyDeansOfAttendance(
+    classId: number,
+    date: string,
+    teacherId: number,
+    summary: { present: number; absent: number; late: number; total: number } | null,
+  ) {
+    const info = await this.classRepo.query(
+      `SELECT pl.name AS p_level_name, c.name AS class_name, t.name AS teacher_name
+       FROM classes c
+       JOIN p_levels pl ON pl.id = c.p_level_id
+       LEFT JOIN users t ON t.id = $2
+       WHERE c.id = $1`,
+      [classId, teacherId],
+    );
+    const label = info[0] ? `${info[0].p_level_name}${info[0].class_name}` : 'a class';
+    const teacher = info[0]?.teacher_name ?? 'A teacher';
+    const day = new Date(date).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+
+    const message = summary
+      ? `${teacher} submitted ${label} attendance for ${day}: ${summary.present} present, ${summary.absent} absent, ${summary.late} late.`
+      : `${teacher} reset ${label} attendance for ${day} to correct it.`;
+
+    const deans = await this.classRepo.query(
+      `SELECT id FROM users WHERE role = 'dean' AND status = 'active'`,
+    );
+    for (const d of deans) {
+      await this.notificationsService.notify(d.id, message, summary ? 'info' : 'warning');
+    }
   }
 
   // ─── Accountant portal ───────────────────────────────────────────────────────
