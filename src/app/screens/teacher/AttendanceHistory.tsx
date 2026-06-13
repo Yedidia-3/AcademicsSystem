@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Fragment } from "react";
 import { useNavigate } from "react-router";
 import { History, Loader2, Check, X, Clock } from "lucide-react";
 import { Card, CardContent } from "../../components/ui/card";
@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { api } from "../../../lib/api";
 import { toast } from "sonner";
 import { useAutoRefresh } from "../../../lib/useAutoRefresh";
+import { groupByWeek } from "../../../lib/weeks";
 
 interface HistoryRow {
   id: number;
@@ -81,7 +82,20 @@ export function AttendanceHistory() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rows.map((r, index) => (
+                  {groupByWeek(rows, r => r.date).map(group => (
+                    <Fragment key={group.key}>
+                      <TableRow>
+                        <TableCell colSpan={6} className="py-2"
+                          style={{ backgroundColor: "#EEF1F6" }}>
+                          <span className="text-xs font-bold uppercase tracking-wide" style={{ color: "#001F5B" }}>
+                            {group.label}
+                          </span>
+                          <span className="text-xs ml-2" style={{ color: "#9A9A9A" }}>
+                            {group.items.length} day{group.items.length !== 1 ? 's' : ''}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                      {group.items.map((r, index) => (
                     <TableRow key={r.id} style={{ backgroundColor: index % 2 === 0 ? "#FFFFFF" : "#F4F4F6" }}>
                       <TableCell className="font-medium" style={{ color: "#2C2C2C" }}>{fmtDate(r.date)}</TableCell>
                       <TableCell>
@@ -111,6 +125,8 @@ export function AttendanceHistory() {
                         </Button>
                       </TableCell>
                     </TableRow>
+                      ))}
+                    </Fragment>
                   ))}
                 </TableBody>
               </Table>

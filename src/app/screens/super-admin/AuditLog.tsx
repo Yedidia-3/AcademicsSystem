@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+﻿import { useState, useEffect, Fragment } from "react";
 import { Search, Download, Loader2 } from "lucide-react";
 import { Card, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { api } from "../../../lib/api";
 import { toast } from "sonner";
+import { groupByWeek } from "../../../lib/weeks";
 
 interface AuditEntry {
   timestamp: string;
@@ -124,22 +125,36 @@ export function AuditLog() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredEntries.map((e, index) => (
-                    <TableRow key={index} style={{ backgroundColor: index % 2 === 0 ? "#FFFFFF" : "#F4F4F6" }}>
-                      <TableCell className="font-mono text-sm" style={{ color: "#2C2C2C" }}>
-                        {new Date(e.timestamp).toLocaleString()}
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium" style={{ color: "#2C2C2C" }}>{e.user}</div>
-                        <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold text-white mt-1"
-                          style={{ backgroundColor: getRoleBadgeColor(e.role) }}>
-                          {e.role}
-                        </span>
-                      </TableCell>
-                      <TableCell className="font-medium" style={{ color: "#2C2C2C" }}>{e.action}</TableCell>
-                      <TableCell style={{ color: "#9A9A9A" }}>{e.details}</TableCell>
-                      <TableCell className="font-mono text-sm" style={{ color: "#9A9A9A" }}>{e.ip_address}</TableCell>
-                    </TableRow>
+                  {groupByWeek(filteredEntries, e => e.timestamp).map(group => (
+                    <Fragment key={group.key}>
+                      <TableRow>
+                        <TableCell colSpan={5} className="py-2" style={{ backgroundColor: "#EEF1F6" }}>
+                          <span className="text-xs font-bold uppercase tracking-wide" style={{ color: "#001F5B" }}>
+                            {group.label}
+                          </span>
+                          <span className="text-xs ml-2" style={{ color: "#9A9A9A" }}>
+                            {group.items.length} event{group.items.length !== 1 ? 's' : ''}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                      {group.items.map((e, index) => (
+                        <TableRow key={`${group.key}-${index}`} style={{ backgroundColor: index % 2 === 0 ? "#FFFFFF" : "#F4F4F6" }}>
+                          <TableCell className="font-mono text-sm" style={{ color: "#2C2C2C" }}>
+                            {new Date(e.timestamp).toLocaleString()}
+                          </TableCell>
+                          <TableCell>
+                            <div className="font-medium" style={{ color: "#2C2C2C" }}>{e.user}</div>
+                            <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold text-white mt-1"
+                              style={{ backgroundColor: getRoleBadgeColor(e.role) }}>
+                              {e.role}
+                            </span>
+                          </TableCell>
+                          <TableCell className="font-medium" style={{ color: "#2C2C2C" }}>{e.action}</TableCell>
+                          <TableCell style={{ color: "#9A9A9A" }}>{e.details}</TableCell>
+                          <TableCell className="font-mono text-sm" style={{ color: "#9A9A9A" }}>{e.ip_address}</TableCell>
+                        </TableRow>
+                      ))}
+                    </Fragment>
                   ))}
                 </TableBody>
               </Table>
