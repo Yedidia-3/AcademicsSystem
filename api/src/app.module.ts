@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { HealthController } from './health.controller';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -15,11 +16,14 @@ import { User } from './entities/user.entity';
 import { Zone } from './entities/zone.entity';
 import { Attendance } from './entities/attendance.entity';
 import { AttendanceSession } from './entities/attendance-session.entity';
+import { AuditLog } from './entities/audit-log.entity';
 import { AcademicsModule } from './academics/academics.module';
 import { AccountantModule } from './accountant/accountant.module';
 import { AdminModule } from './admin/admin.module';
 import { AuthModule } from './auth/auth.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { AuditModule } from './audit/audit.module';
+import { AuditInterceptor } from './audit/audit.interceptor';
 
 @Module({
   controllers: [HealthController],
@@ -54,7 +58,7 @@ import { NotificationsModule } from './notifications/notifications.module';
         return {
           type: 'postgres',
           ...dbConn,
-          entities: [User, AcademicYear, PLevel, Class, Student, ShuffleSession, ShuffleResult, Zone, Enrollment, Notification, Attendance, AttendanceSession],
+          entities: [User, AcademicYear, PLevel, Class, Student, ShuffleSession, ShuffleResult, Zone, Enrollment, Notification, Attendance, AttendanceSession, AuditLog],
           // In production, disable auto-sync by default.
           // Set SYNCHRONIZE_DB=true on the first Railway deploy to create tables,
           // then remove/set to false once the schema is stable.
@@ -64,11 +68,15 @@ import { NotificationsModule } from './notifications/notifications.module';
       },
       inject: [ConfigService],
     }),
+    AuditModule,
     AuthModule,
     AdminModule,
     AcademicsModule,
     AccountantModule,
     NotificationsModule,
+  ],
+  providers: [
+    { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
   ],
 })
 export class AppModule {}

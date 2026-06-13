@@ -8,6 +8,7 @@ import { ShuffleSession } from '../entities/shuffle-session.entity';
 import { User } from '../entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class AdminService {
@@ -16,6 +17,7 @@ export class AdminService {
     @InjectRepository(AcademicYear) private yearRepo: Repository<AcademicYear>,
     @InjectRepository(ShuffleSession) private shuffleSessionRepo: Repository<ShuffleSession>,
     @InjectRepository(PLevel) private pLevelRepo: Repository<PLevel>,
+    private audit: AuditService,
   ) {}
 
   async listUsers() {
@@ -112,103 +114,9 @@ export class AdminService {
     return this.yearRepo.save(year);
   }
 
+  // Real audit log — every mutating action is captured by the global
+  // AuditInterceptor and stored, so this reflects the full activity history.
   async getAuditLog() {
-    const entries: any[] = [];
-
-    // Shuffle session events
-    const sessions = await this.shuffleSessionRepo
-      .createQueryBuilder('ss')
-      .leftJoinAndSelect('ss.submitted_by_user', 'su')
-      .leftJoinAndSelect('ss.reviewed_by_user', 'ru')
-      .leftJoinAndSelect('ss.p_level', 'pl')
-      .orderBy('ss.updated_at', 'DESC')
-      .take(200)
-      .getMany();
-
-    for (const s of sessions) {
-      const algo = s.algorithm?.replace(/_/g, ' ') ?? 'unknown';
-      if (s.submitted_at) {
-        entries.push({
-          timestamp: s.submitted_at,
-          user: s.submitted_by_user?.name ?? 'Dean',
-          role: s.submitted_by_user?.role?.replace('_', ' ') ?? 'dean',
-          action: 'Class list submitted',
-          details: `Submitted ${s.p_level?.name ?? ''} for approval (${algo})`,
-          ip_address: '—',
-        });
-      }
-      if (s.reviewed_at && (s.status === 'approved' || s.status === 'distributed')) {
-        entries.push({
-          timestamp: s.reviewed_at,
-          user: s.reviewed_by_user?.name ?? 'Principal',
-          role: s.reviewed_by_user?.role?.replace('_', ' ') ?? 'principal',
-          action: 'Class list approved',
-          details: `Approved ${s.p_level?.name ?? ''} class distribution`,
-          ip_address: '—',
-        });
-      }
-      if (s.reviewed_at && s.status === 'rejected') {
-        entries.push({
-          timestamp: s.reviewed_at,
-          user: s.reviewed_by_user?.name ?? 'Principal',
-          role: s.reviewed_by_user?.role?.replace('_', ' ') ?? 'principal',
-          action: 'Class list rejected',
-          details: `Rejected ${s.p_level?.name ?? ''}: ${s.rejection_note ?? ''}`,
-          ip_address: '—',
-        });
-      }
-      if (s.distributed_at) {
-        entries.push({
-          timestamp: s.distributed_at,
-          user: s.submitted_by_user?.name ?? 'Dean',
-          role: s.submitted_by_user?.role?.replace('_', ' ') ?? 'dean',
-          action: `${s.p_level?.name ?? ''} distributed`,
-          details: `Distributed class list to teachers and accountant`,
-          ip_address: '—',
-        });
-      }
-    }
-
-    // User creation events
-    const users = await this.userRepo.find({
-      select: ['id', 'name', 'role', 'created_at'] as any,
-      order: { created_at: 'DESC' },
-      take: 100,
-    });
-    for (const u of users) {
-      entries.push({
-        timestamp: u.created_at,
-        user: 'Super Admin',
-        role: 'super admin',
-        action: 'User created',
-        details: `Created ${(u.role as string).replace(/_/g, ' ')} account: ${u.name}`,
-        ip_address: '—',
-      });
-    }
-
-    // Academic year events
-    const years = await this.yearRepo.find({ order: { created_at: 'DESC' }, take: 20 });
-    for (const y of years) {
-      entries.push({
-        timestamp: y.created_at,
-        user: 'Super Admin',
-        role: 'super admin',
-        action: 'Academic year created',
-        details: `Created academic year ${y.name}`,
-        ip_address: '—',
-      });
-      if (y.archived_at) {
-        entries.push({
-          timestamp: y.archived_at,
-          user: 'Super Admin',
-          role: 'super admin',
-          action: 'Academic year archived',
-          details: `Archived academic year ${y.name}`,
-          ip_address: '—',
-        });
-      }
-    }
-
-    return entries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return this.audit.list(1000);
   }
 }
