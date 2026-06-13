@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { BookOpen, Users, Loader2 } from "lucide-react";
+import { BookOpen, Users, Loader2, GraduationCap, ClipboardCheck } from "lucide-react";
 import { Card, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { useNavigate } from "react-router";
@@ -35,33 +35,50 @@ export function TeacherDashboard() {
   useEffect(() => { load(); }, [load]);
   useAutoRefresh(load);
 
+  const totalStudents = classes.reduce((sum, c) => sum + (c.student_count ?? c.students?.length ?? 0), 0);
+  const firstName = (user?.name ?? "Teacher").split(" ")[0];
+  const todayLabel = new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+
+  const stats = [
+    { label: "My Classes", value: classes.length, icon: GraduationCap, color: "#001F5B" },
+    { label: "Total Students", value: totalStudents, icon: Users, color: "#800020" },
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold mb-2" style={{ color: "#2C2C2C" }}>
-          Welcome, {user?.name ?? 'Teacher'}
-        </h2>
-        <p style={{ color: "#9A9A9A" }}>Your assigned classes:</p>
-        {loading ? (
-          <div className="flex items-center gap-2 mt-2">
-            <Loader2 className="animate-spin" size={16} style={{ color: "#001F5B" }} />
-            <span className="text-sm" style={{ color: "#9A9A9A" }}>Loading...</span>
-          </div>
-        ) : (
-          <div className="flex gap-2 mt-2 flex-wrap">
-            {classes.length === 0 ? (
-              <span className="text-sm" style={{ color: "#9A9A9A" }}>No classes assigned yet</span>
-            ) : (
-              classes.map(cls => (
-                <span key={cls.id} className="px-3 py-1 rounded-full text-sm font-semibold text-white"
-                  style={{ backgroundColor: "#001F5B" }}>
-                  {cls.p_level?.name}{cls.name}
-                </span>
-              ))
-            )}
-          </div>
-        )}
+      {/* Greeting banner */}
+      <div className="rounded-xl p-6 text-white relative overflow-hidden"
+        style={{ background: "linear-gradient(120deg, #001F5B 0%, #002a7a 100%)" }}>
+        <div className="absolute right-0 top-0 w-40 h-40 rounded-full opacity-10"
+          style={{ backgroundColor: "#C9A84C", transform: "translate(30%, -30%)" }} />
+        <h2 className="text-2xl font-bold relative z-10">Welcome back, {firstName} 👋</h2>
+        <p className="mt-1 relative z-10" style={{ color: "rgba(255,255,255,0.75)" }}>{todayLabel}</p>
       </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-4">
+        {stats.map(stat => {
+          const Icon = stat.icon;
+          return (
+            <Card key={stat.label} style={{ borderColor: "#E5E5E7" }}>
+              <CardContent className="p-5 flex items-center justify-between">
+                <div>
+                  <p className="text-sm" style={{ color: "#9A9A9A" }}>{stat.label}</p>
+                  <p className="text-3xl font-bold mt-1" style={{ color: "#2C2C2C" }}>
+                    {loading ? "—" : stat.value}
+                  </p>
+                </div>
+                <div className="w-12 h-12 rounded-full flex items-center justify-center"
+                  style={{ backgroundColor: `${stat.color}20` }}>
+                  <Icon size={24} style={{ color: stat.color }} />
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      <h3 className="text-lg font-semibold" style={{ color: "#2C2C2C" }}>My Classes</h3>
 
       {loading ? (
         <div className="flex justify-center py-12">
