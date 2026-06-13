@@ -13,7 +13,10 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   });
 
   if (!res.ok) {
-    if (res.status === 401) {
+    // Only force a redirect when an EXISTING session expired (a token was sent).
+    // A 401 from the login attempt itself (no token yet) must NOT reload the
+    // page — let the LoginScreen show an inline error instead.
+    if (res.status === 401 && token) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';

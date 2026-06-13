@@ -40,7 +40,13 @@ export function LoginScreen() {
         navigate(roleRoutes[res.user.role] ?? '/');
       }
     } catch (err: any) {
+      // No page reload — keep the email, clear only the password, and refocus
+      // it so the user just retypes the password.
       setError(err.message ?? "Invalid email or password");
+      setPassword("");
+      requestAnimationFrame(() =>
+        (document.getElementById("password") as HTMLInputElement | null)?.focus()
+      );
     } finally {
       setLoading(false);
     }

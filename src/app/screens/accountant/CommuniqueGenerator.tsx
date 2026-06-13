@@ -94,7 +94,7 @@ export function CommuniqueGenerator() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [currentStep, setCurrentStep] = useState<"select" | "compose">("select");
   const [template, setTemplate] = useState<string>(() => localStorage.getItem(TEMPLATE_KEY) || DEFAULT_TEMPLATE);
-  const [perPage, setPerPage] = useState<string>("5");
+  const [perPage, setPerPage] = useState<string>("4");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const load = async (days: number) => {
@@ -428,7 +428,7 @@ export function CommuniqueGenerator() {
                     <SelectItem value="1">1 (full letter)</SelectItem>
                     <SelectItem value="2">2 students</SelectItem>
                     <SelectItem value="3">3 students</SelectItem>
-                    <SelectItem value="5">5 students</SelectItem>
+                    <SelectItem value="4">4 students</SelectItem>
                     <SelectItem value="6">6 students</SelectItem>
                   </SelectContent>
                 </Select>
