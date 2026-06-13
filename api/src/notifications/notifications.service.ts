@@ -27,12 +27,19 @@ export class NotificationsService {
     return saved;
   }
 
+  // Only notifications from the current academic year — they reset on a new year.
+  private activeYearStartClause = `n.created_at >= COALESCE(
+    (SELECT created_at FROM academic_years WHERE status = 'active' ORDER BY created_at DESC LIMIT 1),
+    '1970-01-01'::timestamp)`;
+
   async getForUser(userId: number) {
-    return this.notificationRepo.find({
-      where: { user_id: userId },
-      order: { created_at: 'DESC' },
-      take: 50,
-    });
+    return this.notificationRepo
+      .createQueryBuilder('n')
+      .where('n.user_id = :uid', { uid: userId })
+      .andWhere(this.activeYearStartClause)
+      .orderBy('n.created_at', 'DESC')
+      .take(50)
+      .getMany();
   }
 
   async markRead(notificationId: number, userId: number) {
@@ -46,6 +53,11 @@ export class NotificationsService {
   }
 
   async getUnreadCount(userId: number) {
-    return this.notificationRepo.count({ where: { user_id: userId, is_read: false } });
+    return this.notificationRepo
+      .createQueryBuilder('n')
+      .where('n.user_id = :uid', { uid: userId })
+      .andWhere('n.is_read = false')
+      .andWhere(this.activeYearStartClause)
+      .getCount();
   }
 }

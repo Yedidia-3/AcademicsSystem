@@ -50,6 +50,23 @@ export class AdminController {
   @Roles('super_admin')
   archiveAcademicYear(@Param('id') id: string) { return this.adminService.archiveAcademicYear(+id); }
 
+  // Deletion workflow — requested by Super Admin, approved by Principal
+  @Post('academic-years/:id/request-deletion')
+  @Roles('super_admin')
+  requestYearDeletion(@Param('id') id: string) { return this.adminService.requestYearDeletion(+id); }
+
+  @Get('academic-years/pending-deletions')
+  @Roles('principal', 'super_admin')
+  pendingYearDeletions() { return this.adminService.pendingYearDeletions(); }
+
+  @Post('academic-years/:id/approve-deletion')
+  @Roles('principal')
+  approveYearDeletion(@Param('id') id: string) { return this.adminService.approveYearDeletion(+id); }
+
+  @Post('academic-years/:id/reject-deletion')
+  @Roles('principal')
+  rejectYearDeletion(@Param('id') id: string) { return this.adminService.rejectYearDeletion(+id); }
+
   @Get('audit-log')
   @Roles('super_admin')
   getAuditLog() { return this.adminService.getAuditLog(); }

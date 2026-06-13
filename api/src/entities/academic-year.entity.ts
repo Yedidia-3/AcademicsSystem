@@ -23,6 +23,14 @@ export class AcademicYear {
   @Column({ type: 'timestamp', nullable: true })
   archived_at: Date;
 
+  // Deletion requires Principal approval. Flow: admin requests → principal
+  // approves (year is deleted) or rejects (request cleared).
+  @Column({ type: 'enum', enum: ['none', 'pending', 'rejected'], default: 'none' })
+  deletion_status: 'none' | 'pending' | 'rejected';
+
+  @Column({ type: 'timestamp', nullable: true })
+  deletion_requested_at: Date;
+
   @OneToMany(() => PLevel, (pl) => pl.academic_year)
   p_levels: PLevel[];
 

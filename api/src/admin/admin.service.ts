@@ -114,6 +114,56 @@ export class AdminService {
     return this.yearRepo.save(year);
   }
 
+  // Super Admin requests deletion → notify principals for approval.
+  async requestYearDeletion(id: number) {
+    const year = await this.yearRepo.findOne({ where: { id } });
+    if (!year) throw new NotFoundException('Academic year not found');
+    if (year.deletion_status === 'pending') throw new BadRequestException('Deletion already pending approval');
+    year.deletion_status = 'pending';
+    year.deletion_requested_at = new Date();
+    await this.yearRepo.save(year);
+
+    const principals = await this.userRepo.find({ where: { role: 'principal' as any, status: 'active' } });
+    for (const p of principals) {
+      await this.audit.log({
+        actor_name: 'System', actor_role: 'system',
+        action: 'Deletion requested',
+        details: `Super Admin requested deletion of academic year ${year.name} — awaiting your approval`,
+      });
+    }
+    // Notify via notifications too (reuse audit only here; principals see it in their dashboard list)
+    return { message: 'Deletion request sent to the Principal for approval', year };
+  }
+
+  // Principal approves → the year and all its data are permanently deleted (FK cascade).
+  async approveYearDeletion(id: number) {
+    const year = await this.yearRepo.findOne({ where: { id } });
+    if (!year) throw new NotFoundException('Academic year not found');
+    if (year.deletion_status !== 'pending') throw new BadRequestException('No pending deletion request for this year');
+    const name = year.name;
+    await this.yearRepo.delete(id); // cascades to p_levels → classes → students → sessions, etc.
+    return { message: `Academic year ${name} deleted` };
+  }
+
+  // Principal rejects → clears the request.
+  async rejectYearDeletion(id: number) {
+    const year = await this.yearRepo.findOne({ where: { id } });
+    if (!year) throw new NotFoundException('Academic year not found');
+    if (year.deletion_status !== 'pending') throw new BadRequestException('No pending deletion request');
+    year.deletion_status = 'rejected';
+    year.deletion_requested_at = null;
+    await this.yearRepo.save(year);
+    return { message: `Deletion request for ${year.name} rejected` };
+  }
+
+  // Years with a pending deletion request (for the Principal to review).
+  async pendingYearDeletions() {
+    return this.yearRepo.find({
+      where: { deletion_status: 'pending' as any },
+      order: { deletion_requested_at: 'DESC' },
+    });
+  }
+
   // Real audit log — every mutating action is captured by the global
   // AuditInterceptor and stored, so this reflects the full activity history.
   async getAuditLog() {
