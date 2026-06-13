@@ -7,7 +7,7 @@ import {
   Bell, User, LogOut, Settings, LayoutDashboard, Users, FileText,
   GraduationCap, ClipboardCheck, BookOpen, DollarSign, Menu, X, Share2,
 } from "lucide-react";
-import { Avatar, AvatarFallback } from "../components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { Button } from "../components/ui/button";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -134,6 +134,7 @@ export function AuthLayout() {
       <div className="flex-shrink-0 p-4 border-t" style={{ borderColor: "rgba(255,255,255,0.1)" }}>
         <div className="flex items-center gap-3">
           <Avatar className="h-9 w-9 flex-shrink-0" style={{ backgroundColor: "#800020" }}>
+            {user!.avatar && <AvatarImage src={user!.avatar} alt={user!.name} />}
             <AvatarFallback className="text-white text-sm">{initials}</AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
@@ -219,6 +220,7 @@ export function AuthLayout() {
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-2 hover:bg-gray-100 rounded-md p-1.5 transition-colors">
                   <Avatar className="h-8 w-8 flex-shrink-0" style={{ backgroundColor: "#001F5B" }}>
+                    {user!.avatar && <AvatarImage src={user!.avatar} alt={user!.name} />}
                     <AvatarFallback className="text-white text-xs">{initials}</AvatarFallback>
                   </Avatar>
                   <div className="hidden sm:block text-left">

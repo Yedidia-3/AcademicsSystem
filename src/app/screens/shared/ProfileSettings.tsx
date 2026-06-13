@@ -1,13 +1,13 @@
-import { useState } from "react";
-import { Avatar, AvatarFallback } from "../../components/ui/avatar";
+import { useState, useRef } from "react";
+import { Avatar, AvatarFallback, AvatarImage } from "../../components/ui/avatar";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
-import { Loader2 } from "lucide-react";
+import { Loader2, Camera, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../../lib/api";
-import { useAuth } from "../../../lib/auth";
+import { useAuth, AuthUser } from "../../../lib/auth";
 
 const roleLabels: Record<string, string> = {
   super_admin: "Super Admin",
@@ -17,20 +17,82 @@ const roleLabels: Record<string, string> = {
   accountant: "Accountant",
 };
 
+// Resize an image file to a small square data URL (keeps the DB/payload light).
+function resizeImage(file: File, size = 160): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return reject(new Error("no canvas"));
+        // cover-crop to square
+        const min = Math.min(img.width, img.height);
+        const sx = (img.width - min) / 2;
+        const sy = (img.height - min) / 2;
+        ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
+        resolve(canvas.toDataURL("image/jpeg", 0.85));
+      };
+      img.onerror = reject;
+      img.src = reader.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export function ProfileSettings() {
-  const { user } = useAuth();
+  const { user, token, setAuth } = useAuth();
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Profile (name + avatar)
+  const [name, setName] = useState(user?.name ?? "");
+  const [avatar, setAvatar] = useState<string | null>(user?.avatar ?? null);
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  // Password
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const initials = user?.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) ?? "??";
+  const initials = (name || user?.name || "?").split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+
+  const handlePickAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { toast.error("Please choose an image file"); return; }
+    try {
+      const dataUrl = await resizeImage(file);
+      setAvatar(dataUrl);
+    } catch {
+      toast.error("Could not read that image");
+    }
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const profileDirty = name.trim() !== (user?.name ?? "") || (avatar ?? null) !== (user?.avatar ?? null);
+
+  const handleSaveProfile = async () => {
+    if (!name.trim()) { toast.error("Name cannot be empty"); return; }
+    setSavingProfile(true);
+    try {
+      const updated = await api.put<AuthUser>('/api/v1/auth/profile', { name: name.trim(), avatar: avatar ?? "" });
+      if (token) setAuth({ ...(user as AuthUser), ...updated }, token);
+      toast.success("Profile updated");
+    } catch (err: any) {
+      toast.error(err.message ?? "Failed to update profile");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-
     if (newPassword.length < 8) { setError("Password must be at least 8 characters"); return; }
     if (newPassword !== confirmPassword) { setError("New passwords do not match"); return; }
     if (currentPassword === newPassword) { setError("New password must be different from current"); return; }
@@ -55,22 +117,41 @@ export function ProfileSettings() {
       <Card style={{ borderColor: "#E5E5E7" }}>
         <CardHeader><CardTitle>Profile Settings</CardTitle></CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex justify-center">
-            <Avatar className="h-24 w-24" style={{ backgroundColor: "#001F5B" }}>
-              <AvatarFallback className="text-white text-2xl">{initials}</AvatarFallback>
-            </Avatar>
+          {/* Avatar */}
+          <div className="flex flex-col items-center gap-3">
+            <div className="relative">
+              <Avatar className="h-24 w-24" style={{ backgroundColor: "#001F5B" }}>
+                {avatar && <AvatarImage src={avatar} alt={name} />}
+                <AvatarFallback className="text-white text-2xl">{initials}</AvatarFallback>
+              </Avatar>
+              <button onClick={() => fileRef.current?.click()}
+                className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full flex items-center justify-center border-2 border-white shadow"
+                style={{ backgroundColor: "#800020" }} title="Change photo">
+                <Camera size={15} color="#fff" />
+              </button>
+              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handlePickAvatar} />
+            </div>
+            {avatar && (
+              <button onClick={() => setAvatar(null)}
+                className="text-xs flex items-center gap-1" style={{ color: "#C0392B" }}>
+                <Trash2 size={12} /> Remove photo
+              </button>
+            )}
           </div>
 
+          {/* Name (editable) */}
           <div className="space-y-4">
             <div>
               <Label>Full Name</Label>
-              <Input value={user?.name ?? ""} readOnly className="mt-2 h-11"
-                style={{ backgroundColor: "#F4F4F6", color: "#9A9A9A" }} />
+              <Input value={name} onChange={e => setName(e.target.value)} className="mt-2 h-11" />
             </div>
             <div>
               <Label>Email</Label>
               <Input value={user?.email ?? ""} readOnly className="mt-2 h-11"
                 style={{ backgroundColor: "#F4F4F6", color: "#9A9A9A" }} />
+              <p className="text-xs mt-1" style={{ color: "#9A9A9A" }}>
+                Contact the Super Admin to change your email.
+              </p>
             </div>
             <div>
               <Label>Role</Label>
@@ -81,8 +162,13 @@ export function ProfileSettings() {
                 </span>
               </div>
             </div>
+            <Button onClick={handleSaveProfile} disabled={savingProfile || !profileDirty}
+              className="w-full h-11" style={{ backgroundColor: "#800020", color: "#FFFFFF" }}>
+              {savingProfile ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : "Save Profile"}
+            </Button>
           </div>
 
+          {/* Password */}
           <div className="pt-6 border-t" style={{ borderColor: "#E5E5E7" }}>
             <h3 className="text-lg font-semibold mb-4" style={{ color: "#2C2C2C" }}>Change Password</h3>
             <form onSubmit={handleUpdatePassword} className="space-y-4">

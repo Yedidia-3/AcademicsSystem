@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards, BadRequestException } from '@nestjs/common';
+import { Body, Controller, Get, Post, Put, UseGuards, BadRequestException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { CurrentUser } from './current-user.decorator';
 import { LoginDto } from './dto/login.dto';
@@ -24,6 +24,16 @@ export class AuthController {
   @Get('me')
   me(@CurrentUser() user: User) {
     return this.authService.me(user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Put('profile')
+  updateProfile(
+    @CurrentUser() user: User,
+    @Body('name') name?: string,
+    @Body('avatar') avatar?: string,
+  ) {
+    return this.authService.updateProfile(user.id, { name, avatar });
   }
 
   @UseGuards(JwtAuthGuard)

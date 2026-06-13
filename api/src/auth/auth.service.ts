@@ -76,4 +76,15 @@ export class AuthService {
     const { password, ...safeUser } = user;
     return safeUser;
   }
+
+  // Self-service profile update: name and/or avatar.
+  async updateProfile(userId: number, dto: { name?: string; avatar?: string }) {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException();
+    if (typeof dto.name === 'string' && dto.name.trim()) user.name = dto.name.trim();
+    if (typeof dto.avatar === 'string') user.avatar = dto.avatar || null;
+    await this.userRepo.save(user);
+    const { password, ...safeUser } = user;
+    return safeUser;
+  }
 }

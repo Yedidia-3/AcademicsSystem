@@ -27,6 +27,10 @@ export class User {
   @Column({ type: 'enum', enum: ['active', 'inactive'], default: 'active' })
   status: 'active' | 'inactive';
 
+  // Small avatar stored as a data URL (resized client-side before upload)
+  @Column({ type: 'text', nullable: true })
+  avatar: string;
+
   @Column({ default: true })
   must_change_password: boolean;
 
