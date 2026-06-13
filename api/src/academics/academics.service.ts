@@ -6,6 +6,7 @@ import { Class } from '../entities/class.entity';
 import { PLevel } from '../entities/p-level.entity';
 import { Student } from '../entities/student.entity';
 import { AcademicYear } from '../entities/academic-year.entity';
+import { Attendance } from '../entities/attendance.entity';
 
 @Injectable()
 export class AcademicsService {
@@ -14,6 +15,7 @@ export class AcademicsService {
     @InjectRepository(Class) private classRepo: Repository<Class>,
     @InjectRepository(Student) private studentRepo: Repository<Student>,
     @InjectRepository(AcademicYear) private yearRepo: Repository<AcademicYear>,
+    @InjectRepository(Attendance) private attendanceRepo: Repository<Attendance>,
   ) {}
 
   // ─── P-Levels ────────────────────────────────────────────────────────────────
@@ -285,6 +287,69 @@ export class AcademicsService {
       where: { current_class_id: classId },
       order: { rank: 'ASC' },
     });
+  }
+
+  // ─── Attendance ────────────────────────────────────────────────────────────
+
+  // Class roster for a given day with each student's attendance status.
+  // Unmarked students default to "present".
+  async getClassAttendance(classId: number, date: string) {
+    const students = await this.studentRepo.query(
+      `SELECT id, name, rank FROM students
+       WHERE current_class_id = $1 AND status != 'transferred'
+       ORDER BY rank ASC NULLS LAST, name ASC`,
+      [classId],
+    );
+    const marks = await this.attendanceRepo.query(
+      `SELECT student_id, status FROM attendance WHERE class_id = $1 AND date = $2`,
+      [classId, date],
+    );
+    const byStudent = new Map<number, string>();
+    for (const m of marks) byStudent.set(m.student_id, m.status);
+
+    const records = students.map((s: any) => ({
+      student_id: s.id,
+      name: s.name,
+      rank: s.rank,
+      status: byStudent.get(s.id) ?? 'present',
+    }));
+    const alreadyMarked = marks.length > 0;
+    return { date, class_id: classId, already_marked: alreadyMarked, records };
+  }
+
+  // Upsert attendance for a class on a date.
+  async saveClassAttendance(
+    classId: number,
+    date: string,
+    records: { student_id: number; status: 'present' | 'absent' | 'late' }[],
+    markedBy: number,
+  ) {
+    if (!date) throw new BadRequestException('Date is required');
+    for (const r of records ?? []) {
+      const existing = await this.attendanceRepo.findOne({
+        where: { student_id: r.student_id, date },
+      });
+      if (existing) {
+        existing.status = r.status;
+        existing.class_id = classId;
+        existing.marked_by = markedBy;
+        await this.attendanceRepo.save(existing);
+      } else {
+        await this.attendanceRepo.save(
+          this.attendanceRepo.create({
+            student_id: r.student_id,
+            class_id: classId,
+            date,
+            status: r.status,
+            marked_by: markedBy,
+          }),
+        );
+      }
+    }
+    const present = (records ?? []).filter(r => r.status === 'present').length;
+    const absent = (records ?? []).filter(r => r.status === 'absent').length;
+    const late = (records ?? []).filter(r => r.status === 'late').length;
+    return { message: 'Attendance saved', present, absent, late, total: records?.length ?? 0 };
   }
 
   // ─── Accountant portal ───────────────────────────────────────────────────────

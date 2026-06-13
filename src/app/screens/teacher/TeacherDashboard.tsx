@@ -106,10 +106,23 @@ export function TeacherDashboard() {
                   </p>
                 </div>
 
-                <Button onClick={() => navigate(`/teacher/class/${cls.id}?name=${encodeURIComponent((cls.p_level?.name ?? '') + cls.name)}`)} className="w-full"
-                  style={{ backgroundColor: "#800020", color: "#FFFFFF" }}>
-                  View Class
-                </Button>
+                {(() => {
+                  const label = encodeURIComponent((cls.p_level?.name ?? '') + cls.name);
+                  return (
+                    <div className="flex gap-2">
+                      <Button onClick={() => navigate(`/teacher/class/${cls.id}?name=${label}`)}
+                        className="flex-1" variant="outline"
+                        style={{ color: "#800020", borderColor: "#800020" }}>
+                        View Class
+                      </Button>
+                      <Button onClick={() => navigate(`/teacher/class/${cls.id}/attendance?name=${label}`)}
+                        className="flex-1"
+                        style={{ backgroundColor: "#800020", color: "#FFFFFF" }}>
+                        Attendance
+                      </Button>
+                    </div>
+                  );
+                })()}
               </CardContent>
             </Card>
           ))}

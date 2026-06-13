@@ -115,6 +115,25 @@ export class AcademicsController {
     return this.academicsService.getTeacherClasses(user.id);
   }
 
+  // Attendance
+  @Get('classes/:id/attendance')
+  @Roles('teacher', 'dean', 'principal')
+  getAttendance(@Param('id') id: string, @Query('date') date: string) {
+    const day = date || new Date().toISOString().split('T')[0];
+    return this.academicsService.getClassAttendance(+id, day);
+  }
+
+  @Post('classes/:id/attendance')
+  @Roles('teacher')
+  saveAttendance(
+    @Param('id') id: string,
+    @Body('date') date: string,
+    @Body('records') records: { student_id: number; status: 'present' | 'absent' | 'late' }[],
+    @CurrentUser() user: User,
+  ) {
+    return this.academicsService.saveClassAttendance(+id, date, records, user.id);
+  }
+
   // Accountant portal
   @Get('all-classes')
   @Roles('accountant')

@@ -96,10 +96,16 @@ export function MyClassStudentList() {
             My Classes › {className}
           </p>
         </div>
-        <Button onClick={() => setShowDownloadDialog(true)} variant="outline" className="h-11"
-          style={{ color: "#800020", borderColor: "#800020" }}>
-          <Download size={18} className="mr-2" /> Download
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => navigate(`/teacher/class/${classId}/attendance?name=${encodeURIComponent(className)}`)}
+            className="h-11" style={{ backgroundColor: "#800020", color: "#FFFFFF" }}>
+            Take Attendance
+          </Button>
+          <Button onClick={() => setShowDownloadDialog(true)} variant="outline" className="h-11"
+            style={{ color: "#800020", borderColor: "#800020" }}>
+            <Download size={18} className="mr-2" /> Download
+          </Button>
+        </div>
       </div>
 
       <Card style={{ borderColor: "#E5E5E7" }}>

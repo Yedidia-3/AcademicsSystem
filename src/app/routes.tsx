@@ -33,6 +33,7 @@ import { ShuffleReview } from "./screens/principal/ShuffleReview";
 // Teacher screens
 import { TeacherDashboard } from "./screens/teacher/TeacherDashboard";
 import { MyClassStudentList } from "./screens/teacher/MyClassStudentList";
+import { AttendanceScreen } from "./screens/teacher/AttendanceScreen";
 
 // Accountant screens
 import { AccountantDashboard } from "./screens/accountant/AccountantDashboard";
@@ -142,6 +143,10 @@ export const router = createBrowserRouter([
       {
         path: "teacher/class/:classId",
         Component: MyClassStudentList,
+      },
+      {
+        path: "teacher/class/:classId/attendance",
+        Component: AttendanceScreen,
       },
 
       // Accountant routes
