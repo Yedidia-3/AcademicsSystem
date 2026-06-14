@@ -32,6 +32,7 @@ import { ShuffleReview } from "./screens/principal/ShuffleReview";
 
 // Teacher screens
 import { TeacherDashboard } from "./screens/teacher/TeacherDashboard";
+import { MyClasses } from "./screens/teacher/MyClasses";
 import { MyClassStudentList } from "./screens/teacher/MyClassStudentList";
 import { AttendanceScreen } from "./screens/teacher/AttendanceScreen";
 import { AttendanceHistory } from "./screens/teacher/AttendanceHistory";
@@ -140,6 +141,10 @@ export const router = createBrowserRouter([
       {
         path: "teacher/dashboard",
         Component: TeacherDashboard,
+      },
+      {
+        path: "teacher/my-classes",
+        Component: MyClasses,
       },
       {
         path: "teacher/class/:classId",

@@ -115,6 +115,12 @@ export class AcademicsController {
     return this.academicsService.getTeacherClasses(user.id);
   }
 
+  @Get('teacher/today-summary')
+  @Roles('teacher')
+  getTeacherTodaySummary(@CurrentUser() user: User) {
+    return this.academicsService.getTeacherTodaySummary(user.id);
+  }
+
   // Attendance
   @Get('classes/:id/attendance')
   @Roles('teacher', 'dean', 'principal')

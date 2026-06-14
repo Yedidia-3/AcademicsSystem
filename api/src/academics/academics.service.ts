@@ -293,6 +293,42 @@ export class AcademicsService {
     });
   }
 
+  // Today's at-a-glance numbers for the teacher dashboard.
+  async getTeacherTodaySummary(teacherId: number) {
+    const today = new Date().toISOString().split('T')[0];
+
+    const cls = await this.classRepo.query(
+      `SELECT COUNT(*)::int AS classes,
+              COALESCE(SUM((SELECT COUNT(*) FROM students st WHERE st.current_class_id = c.id)), 0)::int AS students
+       FROM classes c
+       WHERE c.teacher_id = $1 AND c.status = 'active' AND c.distributed_at IS NOT NULL`,
+      [teacherId],
+    );
+
+    const att = await this.attendanceSessionRepo.query(
+      `SELECT COALESCE(SUM(s.present),0)::int AS present,
+              COALESCE(SUM(s.absent),0)::int  AS absent,
+              COALESCE(SUM(s.late),0)::int    AS late,
+              COUNT(*)::int                   AS marked
+       FROM attendance_sessions s
+       JOIN classes c ON c.id = s.class_id
+       WHERE c.teacher_id = $1 AND s.date = $2`,
+      [teacherId, today],
+    );
+
+    const classes = cls[0]?.classes ?? 0;
+    const marked = att[0]?.marked ?? 0;
+    return {
+      classes,
+      students: cls[0]?.students ?? 0,
+      present: att[0]?.present ?? 0,
+      absent: att[0]?.absent ?? 0,
+      late: att[0]?.late ?? 0,
+      classes_marked: marked,
+      classes_pending: Math.max(0, classes - marked),
+    };
+  }
+
   // ─── Attendance ────────────────────────────────────────────────────────────
 
   // Class roster for a given day with each student's attendance status.
