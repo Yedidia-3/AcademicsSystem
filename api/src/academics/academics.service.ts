@@ -266,7 +266,7 @@ export class AcademicsService {
   // ─── Teacher portal ───────────────────────────────────────────────────────────
 
   async getTeacherClasses(teacherId: number) {
-    // Only classes that have been DISTRIBUTED are visible to the teacher.
+    // Only DISTRIBUTED classes from the ACTIVE year — a new year starts clean.
     const classes = await this.classRepo.query(
       `SELECT c.id, c.name, c.p_level_id, pl.name AS p_level_name,
               (SELECT COUNT(*) FROM students s WHERE s.current_class_id = c.id) AS student_count
@@ -275,6 +275,7 @@ export class AcademicsService {
        WHERE c.teacher_id = $1
          AND c.status = 'active'
          AND c.distributed_at IS NOT NULL
+         AND pl.academic_year_id = (SELECT id FROM academic_years WHERE status = 'active' ORDER BY created_at DESC LIMIT 1)
        ORDER BY pl.name ASC, c.name ASC`,
       [teacherId],
     );
@@ -301,7 +302,9 @@ export class AcademicsService {
       `SELECT COUNT(*)::int AS classes,
               COALESCE(SUM((SELECT COUNT(*) FROM students st WHERE st.current_class_id = c.id)), 0)::int AS students
        FROM classes c
-       WHERE c.teacher_id = $1 AND c.status = 'active' AND c.distributed_at IS NOT NULL`,
+       JOIN p_levels pl ON pl.id = c.p_level_id
+       WHERE c.teacher_id = $1 AND c.status = 'active' AND c.distributed_at IS NOT NULL
+         AND pl.academic_year_id = (SELECT id FROM academic_years WHERE status = 'active' ORDER BY created_at DESC LIMIT 1)`,
       [teacherId],
     );
 
@@ -312,7 +315,9 @@ export class AcademicsService {
               COUNT(*)::int                   AS marked
        FROM attendance_sessions s
        JOIN classes c ON c.id = s.class_id
-       WHERE c.teacher_id = $1 AND s.date = $2`,
+       JOIN p_levels pl ON pl.id = c.p_level_id
+       WHERE c.teacher_id = $1 AND s.date = $2
+         AND pl.academic_year_id = (SELECT id FROM academic_years WHERE status = 'active' ORDER BY created_at DESC LIMIT 1)`,
       [teacherId, today],
     );
 
@@ -440,6 +445,7 @@ export class AcademicsService {
        JOIN classes c ON c.id = s.class_id
        JOIN p_levels pl ON pl.id = c.p_level_id
        WHERE c.teacher_id = $1
+         AND pl.academic_year_id = (SELECT id FROM academic_years WHERE status = 'active' ORDER BY created_at DESC LIMIT 1)
        ORDER BY s.date DESC, s.submitted_at DESC`,
       [teacherId],
     );
