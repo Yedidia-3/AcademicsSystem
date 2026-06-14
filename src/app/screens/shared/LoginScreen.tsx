@@ -6,6 +6,7 @@ import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { api } from "../../../lib/api";
 import { useAuth, AuthUser, UserRole } from "../../../lib/auth";
+import logoImg from "../../../assets/images/official-logo.png";
 
 const roleRoutes: Record<UserRole, string> = {
   super_admin: "/admin/dashboard",
@@ -68,11 +69,12 @@ export function LoginScreen() {
 
         <div className="text-center z-10 px-12 space-y-6 max-w-md">
           {/* Logo */}
-          <div className="w-28 h-28 mx-auto rounded-full flex items-center justify-center"
-            style={{ backgroundColor: "#800020" }}>
-            <svg viewBox="0 0 24 24" className="w-14 h-14 text-white" fill="currentColor">
-              <path d="M12 3L1 9L12 15L21 10.09V17H23V9M5 13.18V17.18L12 21L19 17.18V13.18L12 17L5 13.18Z" />
-            </svg>
+          <div className="mx-auto flex items-center justify-center">
+            <img 
+              src={logoImg} 
+              alt="Jericho School Logo"
+              className="h-32 w-auto object-contain"
+            />
           </div>
           <div>
             <h1 className="text-4xl xl:text-5xl font-bold text-white leading-tight">
@@ -98,12 +100,11 @@ export function LoginScreen() {
 
           {/* Mobile-only logo */}
           <div className="flex flex-col items-center mb-8 lg:hidden">
-            <div className="w-16 h-16 rounded-full flex items-center justify-center mb-3"
-              style={{ backgroundColor: "#001F5B" }}>
-              <svg viewBox="0 0 24 24" className="w-8 h-8 text-white" fill="currentColor">
-                <path d="M12 3L1 9L12 15L21 10.09V17H23V9M5 13.18V17.18L12 21L19 17.18V13.18L12 17L5 13.18Z" />
-              </svg>
-            </div>
+            <img 
+              src={logoImg} 
+              alt="Jericho School Logo"
+              className="h-20 w-auto object-contain mb-3"
+            />
             <h1 className="text-xl font-bold" style={{ color: "#001F5B" }}>Jericho School</h1>
             <p className="text-sm" style={{ color: "#9A9A9A" }}>Management System</p>
           </div>
