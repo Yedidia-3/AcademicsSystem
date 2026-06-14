@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, OnApplicationBootstrap } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { Repository } from 'typeorm';
@@ -11,7 +11,9 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { AuditService } from '../audit/audit.service';
 
 @Injectable()
-export class AdminService {
+export class AdminService implements OnApplicationBootstrap {
+  private readonly logger = new Logger(AdminService.name);
+
   constructor(
     @InjectRepository(User) private userRepo: Repository<User>,
     @InjectRepository(AcademicYear) private yearRepo: Repository<AcademicYear>,
@@ -19,6 +21,26 @@ export class AdminService {
     @InjectRepository(PLevel) private pLevelRepo: Repository<PLevel>,
     private audit: AuditService,
   ) {}
+
+  // First-run seed: if there are no users at all, create the root Super Admin
+  // so a fresh deployment can be logged into without shell access.
+  async onApplicationBootstrap() {
+    const count = await this.userRepo.count();
+    if (count > 0) return;
+    const email = 'admin@jericho.rw';
+    const password = 'Admin@Jericho2025!';
+    const hash = await bcrypt.hash(password, 10);
+    await this.userRepo.save(
+      this.userRepo.create({
+        name: 'Super Admin',
+        email,
+        password: hash,
+        role: 'super_admin' as any,
+        must_change_password: true,
+      }),
+    );
+    this.logger.log(`Seeded initial Super Admin → ${email} / ${password} (must change on first login)`);
+  }
 
   async listUsers() {
     return this.userRepo.find({
