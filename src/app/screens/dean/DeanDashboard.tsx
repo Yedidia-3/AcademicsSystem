@@ -5,6 +5,7 @@ import { Button } from "../../components/ui/button";
 import { useNavigate } from "react-router";
 import { api } from "../../../lib/api";
 import { useAutoRefresh } from "../../../lib/useAutoRefresh";
+import { pLevelStatus } from "../../../lib/plevelStatus";
 
 interface AcademicYear { id: number; name: string; status: string; }
 interface PLevel { id: number; name: string; status: string; classes: { id: number; students?: any[]; student_count?: number }[]; student_count?: number; }
@@ -112,16 +113,15 @@ export function DeanDashboard() {
               <h3 className="text-lg font-semibold mb-4" style={{ color: "#2C2C2C" }}>P-Level Overview</h3>
               <div className="space-y-3">
                 {pLevels.map((pl) => {
-                  const session = sessions.find(s => s.p_level?.id === pl.id);
-                  const displayStatus = session ? session.status : 'active';
+                  const status = pLevelStatus(pl as any);
                   return (
                     <div key={pl.id} className="flex items-center justify-between p-4 rounded-lg border bg-white"
                       style={{ borderColor: "#E5E5E7" }}>
                       <div className="flex items-center gap-4">
                         <span className="text-lg font-bold" style={{ color: "#2C2C2C" }}>{pl.name}</span>
-                        <span className="px-3 py-1 rounded-full text-xs font-semibold text-white"
-                          style={{ backgroundColor: statusColor[displayStatus] ?? "#9A9A9A" }}>
-                          {statusLabel[displayStatus] ?? displayStatus}
+                        <span className="px-3 py-1 rounded-full text-xs font-semibold"
+                          style={{ backgroundColor: status.bg, color: status.color }}>
+                          {status.label}
                         </span>
                       </div>
                       <Button variant="outline" size="sm"

@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { toast } from "sonner";
 import { api } from "../../../lib/api";
 import { useAutoRefresh } from "../../../lib/useAutoRefresh";
+import { pLevelStatus } from "../../../lib/plevelStatus";
 
 interface AcademicYear { id: number; name: string; status: string; }
 interface PLevel {
@@ -129,19 +130,17 @@ export function PLevelManagement() {
             const studentCount = pl.student_count
               ?? pl.classes?.reduce((sum, c) => sum + (c.student_count ?? c.students?.length ?? 0), 0)
               ?? 0;
-            const distributed = pl.is_distributed || pl.any_distributed;
+            const status = pLevelStatus(pl);
             return (
               <Card key={pl.id} style={{ borderColor: "#E5E5E7" }}>
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="text-2xl font-bold" style={{ color: "#2C2C2C" }}>{pl.name}</h3>
-                      {distributed && (
-                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold text-white"
-                          style={{ backgroundColor: pl.is_distributed ? "#1A7F4B" : "#D97706" }}>
-                          {pl.is_distributed ? "Distributed" : "Partly distributed"}
-                        </span>
-                      )}
+                      <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
+                        style={{ backgroundColor: status.bg, color: status.color }}>
+                        {status.label}
+                      </span>
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
