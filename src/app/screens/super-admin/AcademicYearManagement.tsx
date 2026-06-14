@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { toast } from "sonner";
 import { api } from "../../../lib/api";
 
-interface AcademicYear { id: number; name: string; status: string; archived_at: string | null; created_at: string; }
+interface AcademicYear { id: number; name: string; status: string; archived_at: string | null; created_at: string; deletion_status?: 'none' | 'pending' | 'rejected'; }
 
 export function AcademicYearManagement() {
   const [years, setYears] = useState<AcademicYear[]>([]);
@@ -47,6 +47,17 @@ export function AcademicYearManagement() {
       toast.error(err.message ?? 'Failed to create year');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleRequestDeletion = async (year: AcademicYear) => {
+    if (!confirm(`Request deletion of ${year.name}? The Principal must approve before it is permanently deleted.`)) return;
+    try {
+      await api.post(`/api/v1/admin/academic-years/${year.id}/request-deletion`, {});
+      toast.success(`Deletion request for ${year.name} sent to the Principal`);
+      await load();
+    } catch (err: any) {
+      toast.error(err.message ?? 'Failed to request deletion');
     }
   };
 
@@ -121,6 +132,7 @@ export function AcademicYearManagement() {
                     <TableHead className="text-white">Year</TableHead>
                     <TableHead className="text-white">Status</TableHead>
                     <TableHead className="text-white">Archived Date</TableHead>
+                    <TableHead className="text-white text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -132,6 +144,18 @@ export function AcademicYearManagement() {
                       </TableCell>
                       <TableCell style={{ color: "#9A9A9A" }}>
                         {y.archived_at ? new Date(y.archived_at).toLocaleDateString() : "—"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {y.deletion_status === 'pending' ? (
+                          <span className="text-xs font-semibold" style={{ color: "#D97706" }}>
+                            Pending Principal approval
+                          </span>
+                        ) : (
+                          <Button variant="outline" size="sm" onClick={() => handleRequestDeletion(y)}
+                            style={{ color: "#C0392B", borderColor: "#C0392B" }}>
+                            Request Deletion
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
