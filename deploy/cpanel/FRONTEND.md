@@ -8,17 +8,19 @@ Target: static files in your domain's docroot (e.g. `public_html/`).
 ---
 
 ### Step 1 — Build locally with the API URL baked in
-Run from the **repo root** (not `apps/`). Set `VITE_API_URL` to your live API:
+Run from **`apps/frontend`**. Set `VITE_API_URL` to your live API:
 
 ```powershell
 # Windows PowerShell
+cd apps/frontend
 $env:VITE_API_URL = "https://api.yourdomain.com"; npm run build
 ```
 ```bash
 # macOS / Linux
+cd apps/frontend
 VITE_API_URL="https://api.yourdomain.com" npm run build
 ```
-- [ ] Output appears in `dist/` at the repo root.
+- [ ] Output appears in `apps/frontend/dist/`.
 
 > If you skip `VITE_API_URL`, the site silently calls `http://localhost:3001`
 > and every request fails in production.
@@ -26,12 +28,12 @@ VITE_API_URL="https://api.yourdomain.com" npm run build
 ### Step 2 — (Optional) confirm the URL was baked in
 ```bash
 # bash — should print your domain, NOT localhost
-grep -o "https://api.yourdomain.com" dist/assets/*.js | head -1
+grep -o "https://api.yourdomain.com" apps/frontend/dist/assets/*.js | head -1
 ```
 
 ### Step 3 — Upload the site (File Manager / FTP)
-- [ ] Upload the **contents** of `dist/` into `public_html/`
-      (the files go directly in the docroot, not inside a `dist/` subfolder).
+- [ ] Upload the **contents** of `apps/frontend/dist/` into your frontend docroot
+      (e.g. `mis.jerichoschool.ac.rw/`) — files go directly in the docroot, not inside a `dist/` subfolder.
 
 ### Step 4 — Upload the SPA `.htaccess`
 - [ ] Upload `deploy/cpanel/.htaccess` into `public_html/`, next to `index.html`.
@@ -62,7 +64,7 @@ grep -o "https://api.yourdomain.com" dist/assets/*.js | head -1
 
 ### Updating the frontend later
 1. Rebuild with the same `VITE_API_URL` (Step 1).
-2. Re-upload the new `dist/` contents to `public_html/` (keep `.htaccess`).
+2. Re-upload the new `apps/frontend/dist/` contents to your frontend docroot (keep `.htaccess`).
    No app restart needed — it's static files.
 
 ### If something's off

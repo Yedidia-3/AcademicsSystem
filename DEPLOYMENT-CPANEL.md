@@ -106,16 +106,16 @@ for one restart, then back to `false`.)
 `VITE_API_URL` is inlined at **build time**, so it must be set before building
 (there is no server-side env for the static site):
 ```bash
-# from repo root
+# from apps/frontend
 # PowerShell:
-$env:VITE_API_URL = "https://api.yourdomain.com"; npm run build
+cd apps/frontend; $env:VITE_API_URL = "https://api.yourdomain.com"; npm run build
 # bash:
-VITE_API_URL="https://api.yourdomain.com" npm run build
+cd apps/frontend && VITE_API_URL="https://api.yourdomain.com" npm run build
 ```
-Output → `dist/` at the repo root.
+Output → `apps/frontend/dist/`.
 
 ### 2. Upload
-- Upload the **contents** of `dist/` into `public_html/` (or your domain's docroot).
+- Upload the **contents** of `apps/frontend/dist/` into your frontend docroot (e.g. the `mis.` subdomain folder).
 - Also upload **`deploy/cpanel/.htaccess`** into the same folder (rename to `.htaccess`
   if your FTP client hid it). This gives react-router its SPA fallback — without it,
   refreshing any route 404s.
@@ -137,8 +137,8 @@ set a real password, then create your other users.
 ---
 
 ## Updating later (no SSH)
-1. Rebuild locally (`apps/api` and/or root frontend).
-2. Re-upload changed `dist/` files.
+1. Rebuild locally (`apps/api` and/or `apps/frontend`).
+2. Re-upload changed `dist/` files (`apps/api/dist` or `apps/frontend/dist`).
 3. API change → **Restart App** in Setup Node.js App. Frontend change → just the files.
 
 ---
