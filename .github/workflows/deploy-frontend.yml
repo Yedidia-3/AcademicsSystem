@@ -1,0 +1,54 @@
+name: Deploy Frontend (cPanel)
+
+# Auto-builds and deploys apps/frontend to the mis.jerichoschool.ac.rw docroot
+# whenever frontend code is pushed to main. Manual run also available.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/frontend/**'
+      - '.github/workflows/deploy-frontend.yml'
+  workflow_dispatch:
+
+# Avoid overlapping deploys clobbering each other.
+concurrency:
+  group: deploy-frontend
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm --prefix apps/frontend ci
+
+      - name: Build
+        # VITE_API_URL is baked in at build time (it is NOT a server setting).
+        # Not a secret — it's a public URL — so it lives here in plain sight.
+        env:
+          VITE_API_URL: https://api.jerichoschool.ac.rw
+        run: npm --prefix apps/frontend run build
+
+      - name: Deploy to cPanel over FTPS
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          local-dir: ./apps/frontend/dist/
+          server-dir: mis.jerichoschool.ac.rw/
+          # Don't touch cPanel-managed folders that live in the docroot.
+          exclude: |
+            **/cgi-bin/**
+            **/.well-known/**
