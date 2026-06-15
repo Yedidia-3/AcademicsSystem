@@ -4,6 +4,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/http-exception.filter';
 import { ResponseInterceptor } from './common/response.interceptor';
+import { join } from 'path';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -21,6 +22,20 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalInterceptors(new ResponseInterceptor());
+
+  // Serve static files from frontend build
+  app.useStaticAssets(join(__dirname, '../../frontend/dist'), {
+    prefix: '/',
+  });
+
+  // SPA fallback: serve index.html for all non-API routes
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api')) {
+      next();
+    } else {
+      res.sendFile(join(__dirname, '../../frontend/dist/index.html'));
+    }
+  });
 
   const port = process.env.PORT ?? 3001;
   await app.listen(port);
