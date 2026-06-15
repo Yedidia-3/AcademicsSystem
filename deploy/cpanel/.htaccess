@@ -1,0 +1,31 @@
+# Jericho frontend (React + react-router) — SPA fallback for Apache/cPanel.
+# Upload this into the SAME folder as the built index.html (e.g. public_html/).
+# Without it, refreshing or deep-linking any route (e.g. /dean/import) returns 404.
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Don't rewrite real files or directories (assets, images, etc.).
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Everything else → index.html so react-router handles it client-side.
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+# Force HTTPS (cPanel AutoSSL). Comment out until the SSL cert is issued.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTPS} off
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>
+
+# Long-cache hashed assets (Vite fingerprints filenames, so this is safe).
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/css "access plus 1 year"
+  ExpiresByType application/javascript "access plus 1 year"
+  ExpiresByType image/png "access plus 1 year"
+  ExpiresByType image/jpeg "access plus 1 year"
+</IfModule>

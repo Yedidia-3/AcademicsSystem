@@ -21,7 +21,7 @@ services:
 
   api:
     build:
-      context: ./api
+      context: ../../apps/api
       dockerfile: Dockerfile
     container_name: jericho_api
     restart: unless-stopped

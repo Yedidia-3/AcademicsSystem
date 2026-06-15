@@ -1,15 +1,15 @@
 # Dependencies
 node_modules/
-api/node_modules/
-frontend/node_modules/
+apps/api/node_modules/
+apps/frontend/node_modules/
 
 # Build output
-api/dist/
+apps/api/dist/
 dist/
 
 # Environment files (contains secrets)
 .env
-api/.env
+apps/api/.env
 **/.env.local
 **/.env.*.local
 

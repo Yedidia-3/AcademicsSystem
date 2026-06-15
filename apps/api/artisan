@@ -1,4 +1,0 @@
-#!/usr/bin/env php
-<?php
-// Dummy artisan script to satisfy Composer post-autoload.
-exit(0);

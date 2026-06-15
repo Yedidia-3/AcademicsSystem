@@ -3,8 +3,8 @@ services:
   - type: web
     name: jericho-api
     env: docker
-    dockerfilePath: ./api/Dockerfile
-    dockerContext: .
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: ./apps/api
     plan: free
     healthCheckPath: /api/v1/health
     envVars:
