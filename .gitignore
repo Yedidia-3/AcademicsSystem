@@ -28,3 +28,6 @@ Thumbs.db
 # Vite / TypeScript cache
 *.tsbuildinfo
 .vite/
+
+# Build/deploy artifacts
+*.zip
