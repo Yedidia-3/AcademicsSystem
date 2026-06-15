@@ -78,7 +78,17 @@ Into the subdomain folder, upload **only these three**:
 
 ---
 
-### Updating the backend later (no SSH)
+### Updating the backend later
+**Automated (default):** push to `main` with changes under `apps/api/` →
+GitHub Actions (`.github/workflows/deploy-backend.yml`) builds, deploys the
+compiled `dist/` over FTPS, and restarts the app. No manual steps for code changes.
+
+> ⚠️ **New npm dependency?** The pipeline ships compiled code only, not
+> `node_modules`. If you add/upgrade a package in `apps/api/package.json`, after
+> the deploy click **Run NPM Install** once in cPanel → Setup Node.js App, then
+> Restart. Pure code changes need nothing.
+
+**Manual fallback (no SSH):**
 1. `cd apps/api && npm run build`
 2. Re-upload the changed `dist/` files.
 3. **Restart App** in Setup Node.js App.

@@ -1,0 +1,65 @@
+name: Deploy Backend (cPanel)
+
+# Builds the NestJS API and deploys the compiled output to the
+# api.jerichoschool.ac.rw Node app on cPanel, then restarts it via Passenger's
+# tmp/restart.txt mechanism (works without SSH).
+#
+# NOTE: this ships compiled CODE only, not node_modules. If you ADD a new npm
+# dependency (change apps/api/package.json deps), you must click "Run NPM
+# Install" once in cPanel → Setup Node.js App after this deploy. Pure code
+# changes need no manual step.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/**'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/api/package-lock.json
+
+      - name: Install & build
+        run: |
+          npm --prefix apps/api ci
+          npm --prefix apps/api run build
+
+      - name: Deploy compiled dist over FTPS
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          local-dir: ./apps/api/dist/
+          server-dir: api.jerichoschool.ac.rw/dist/
+
+      - name: Sync manifests & restart the app
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          set -e
+          BASE="ftp://$FTP_SERVER/api.jerichoschool.ac.rw"
+          # Keep the server's package files in sync with source.
+          curl -k --ssl-reqd -T apps/api/package.json      "$BASE/package.json"      --user "$FTP_USERNAME:$FTP_PASSWORD"
+          curl -k --ssl-reqd -T apps/api/package-lock.json "$BASE/package-lock.json" --user "$FTP_USERNAME:$FTP_PASSWORD"
+          # Touch tmp/restart.txt → Passenger reloads the app on the next request.
+          echo "restart $(date -u +%FT%TZ)" > restart.txt
+          curl -k --ssl-reqd --ftp-create-dirs -T restart.txt "$BASE/tmp/restart.txt" --user "$FTP_USERNAME:$FTP_PASSWORD"
